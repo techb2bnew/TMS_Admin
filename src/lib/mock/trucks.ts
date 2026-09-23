@@ -1,0 +1,58 @@
+import type { Truck } from "@/types";
+
+export const mockTrucks: Truck[] = [
+  {
+    id: "t1",
+    truck_number: "PB-11-TA-4521",
+    capacity_kg: 16000,
+    status: "active",
+    insurance_expiry: "2027-02-14",
+    last_maintenance: "2026-08-02",
+    assigned_driver: "Gagan Deep",
+  },
+  {
+    id: "t2",
+    truck_number: "UP-32-KT-1092",
+    capacity_kg: 12000,
+    status: "active",
+    insurance_expiry: "2026-10-05",
+    last_maintenance: "2026-07-18",
+    assigned_driver: "Rakesh Yadav",
+  },
+  {
+    id: "t3",
+    truck_number: "MH-12-BX-7743",
+    capacity_kg: 14500,
+    status: "active",
+    insurance_expiry: "2026-11-30",
+    last_maintenance: "2026-06-25",
+    assigned_driver: "Suresh Patil",
+  },
+  {
+    id: "t4",
+    truck_number: "HR-26-CD-3301",
+    capacity_kg: 10000,
+    status: "active",
+    insurance_expiry: "2027-01-10",
+    last_maintenance: "2026-08-10",
+    assigned_driver: "Manoj Kumar",
+  },
+  {
+    id: "t5",
+    truck_number: "RJ-14-EF-9087",
+    capacity_kg: 18000,
+    status: "maintenance",
+    insurance_expiry: "2026-09-28",
+    last_maintenance: "2026-09-15",
+    assigned_driver: null,
+  },
+  {
+    id: "t6",
+    truck_number: "MP-09-GH-6612",
+    capacity_kg: 9000,
+    status: "inactive",
+    insurance_expiry: "2026-09-25",
+    last_maintenance: "2026-03-11",
+    assigned_driver: null,
+  },
+];

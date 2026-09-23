@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+/* Admin panel is always light — this app doesn't ship a dark mode toggle,
+   so `dark:` utilities are disabled rather than following the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #eef1f8;
+  --foreground: #10182b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@keyframes blob-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(30px, -40px) scale(1.12); }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes road-dash {
+  to { stroke-dashoffset: -60; }
+}
+
+@keyframes drive {
+  0% { transform: translateX(-8%); }
+  50% { transform: translateX(96%); }
+  50.01% { transform: translateX(-8%); }
+  100% { transform: translateX(-8%); }
+}
+
+@keyframes pulse-ring {
+  0% { opacity: 0.6; transform: scale(0.9); }
+  100% { opacity: 0; transform: scale(1.8); }
+}
+
+.animate-blob {
+  animation: blob-float 9s ease-in-out infinite;
+}
+
+.animate-fade-in-up {
+  opacity: 0;
+  animation: fade-in-up 0.6s ease-out forwards;
+}
+
+.animate-road-dash {
+  animation: road-dash 1.6s linear infinite;
+}
+
+.animate-drive {
+  animation: drive 7s linear infinite;
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+@keyframes float-badge {
+  0%, 100% { transform: translateY(0) rotate(var(--tilt, 0deg)); }
+  50% { transform: translateY(-12px) rotate(var(--tilt, 0deg)); }
+}
+
+.animate-float {
+  animation: float-badge 4.5s ease-in-out infinite;
+}
+
+@keyframes mesh-drift {
+  0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  33% { transform: translate(4%, -3%) scale(1.08) rotate(4deg); }
+  66% { transform: translate(-3%, 4%) scale(0.96) rotate(-3deg); }
+}
+
+.animate-mesh {
+  animation: mesh-drift 14s ease-in-out infinite;
+}
+
+.app-shell-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 40rem at 15% -10%, rgba(59, 130, 246, 0.08), transparent 60%),
+    radial-gradient(50rem 35rem at 110% 10%, rgba(99, 102, 241, 0.06), transparent 60%),
+    radial-gradient(60rem 40rem at 50% 120%, rgba(59, 130, 246, 0.05), transparent 60%),
+    var(--background);
+}
+
+.viz-root {
+  --viz-text-primary: #0b0b0b;
+  --viz-text-secondary: #52514e;
+  --viz-muted: #898781;
+  --viz-gridline: #e1e0d9;
+  --viz-baseline: #c3c2b7;
+  --viz-series-1: #2a78d6;
+  --viz-series-1-wash: rgba(42, 120, 214, 0.12);
+  --viz-surface: #fcfcfb;
+}
