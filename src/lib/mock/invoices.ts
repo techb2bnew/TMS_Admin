@@ -1,5 +1,13 @@
 import type { Invoice, Settlement } from "@/types";
 
+// Mutating this exported array (not reassigning it) lets a newly created
+// invoice show up on the Billing page too within the same client session —
+// both pages read the same module-level array. Once this app is wired to
+// Supabase, this becomes a real insert into the `invoices` table instead.
+export function addMockInvoice(invoice: Invoice) {
+  mockInvoices.unshift(invoice);
+}
+
 export const mockInvoices: Invoice[] = [
   {
     id: "INV-2041",

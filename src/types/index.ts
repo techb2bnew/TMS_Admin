@@ -76,3 +76,54 @@ export type NotificationItem = {
   read: boolean;
   created_at: string;
 };
+
+export type Customer = {
+  id: string;
+  name: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  billingAddress: string;
+  paymentTerms: string;
+  createdAt: string;
+};
+
+export type ExpenseCategory = "Fuel" | "Tolls" | "Maintenance" | "Insurance" | "Other";
+
+export type Expense = {
+  id: string;
+  category: ExpenseCategory;
+  amount: number;
+  truckNumber: string;
+  date: string;
+  notes: string;
+};
+
+export type TeamRole = "Admin" | "Dispatcher" | "Accountant";
+export type TeamStatus = "Active" | "Invited";
+
+export type TeamUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: TeamRole;
+  status: TeamStatus;
+  addedAt: string;
+};
+
+export type CheckCall = {
+  id: string;
+  loadId: string;
+  note: string;
+  createdAt: string;
+  createdBy: string;
+};
+
+export type LoadTemplate = {
+  id: string;
+  name: string;
+  customerName: string;
+  pickupLocation: string;
+  dropLocation: string;
+  defaultRate: number;
+};

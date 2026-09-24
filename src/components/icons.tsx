@@ -148,6 +148,48 @@ export function DownloadIcon({ className }: IconProps) {
   );
 }
 
+export function CustomersIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" strokeWidth="1.7">
+      <circle cx="9" cy="8" r="3.2" stroke="currentColor" />
+      <path d="M3.2 19.5c0-3.3 2.6-6 5.8-6s5.8 2.7 5.8 6" stroke="currentColor" strokeLinecap="round" />
+      <circle cx="17" cy="8.5" r="2.4" stroke="currentColor" />
+      <path d="M15.5 13.3c2.6.3 4.7 2.6 4.7 5.5" stroke="currentColor" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function ExpensesIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" strokeWidth="1.7">
+      <rect x="3.5" y="5.5" width="17" height="13" rx="2" stroke="currentColor" />
+      <circle cx="12" cy="12" r="2.6" stroke="currentColor" />
+      <path d="M3.5 9h2.2M18.3 9h2.2M3.5 15h2.2M18.3 15h2.2" stroke="currentColor" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function TeamIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" strokeWidth="1.7">
+      <circle cx="8.5" cy="7.5" r="3" stroke="currentColor" />
+      <path d="M2.8 19c0-3.1 2.5-5.6 5.7-5.6s5.7 2.5 5.7 5.6" stroke="currentColor" strokeLinecap="round" />
+      <path d="M15.5 8.2a2.6 2.6 0 1 1 0 5.2" stroke="currentColor" strokeLinecap="round" />
+      <path d="M16.3 13.6c2.4.4 4.2 2.5 4.2 5" stroke="currentColor" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function KebabIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" strokeWidth="0">
+      <circle cx="12" cy="5.5" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="12" cy="18.5" r="1.8" />
+    </svg>
+  );
+}
+
 export function TruckMarkerIcon({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none">

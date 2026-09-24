@@ -2,10 +2,17 @@
 
 import { useState, type FormEvent } from "react";
 import Modal from "@/components/ui/Modal";
+import AddCustomerForm from "@/components/forms/AddCustomerForm";
 import { APP_TEXT } from "@/constants/text";
-import type { Load } from "@/types";
+import { mockLoadTemplates } from "@/lib/mock/loadTemplates";
+import { mockCustomers } from "@/lib/mock/customers";
+import type { Customer, Load } from "@/types";
 
 const C = APP_TEXT.common;
+const TT = APP_TEXT.loads.loadTemplates;
+const CT = APP_TEXT.loads.customerSelect;
+
+const ADD_NEW_CUSTOMER = "__add_new__";
 
 type Errors = Partial<Record<"customer_name" | "pickup_location" | "drop_location" | "weight_kg" | "rate", string>>;
 
@@ -22,6 +29,9 @@ function inputClass(hasError: boolean) {
 }
 
 export default function AddLoadForm({ open, onClose, onAdd }: AddLoadFormProps) {
+  const [templateId, setTemplateId] = useState("");
+  const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
+  const [customerId, setCustomerId] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
@@ -29,8 +39,37 @@ export default function AddLoadForm({ open, onClose, onAdd }: AddLoadFormProps) 
   const [rate, setRate] = useState("");
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
+
+  function handleCustomerChange(id: string) {
+    if (id === ADD_NEW_CUSTOMER) {
+      setShowAddCustomer(true);
+      return;
+    }
+    setCustomerId(id);
+    setCustomerName(customers.find((c) => c.id === id)?.name ?? "");
+  }
+
+  function handleNewCustomer(customer: Customer) {
+    setCustomers((prev) => [customer, ...prev]);
+    setCustomerId(customer.id);
+    setCustomerName(customer.name);
+    setShowAddCustomer(false);
+  }
+
+  function handleTemplateChange(id: string) {
+    setTemplateId(id);
+    const template = mockLoadTemplates.find((t) => t.id === id);
+    if (!template) return;
+    setCustomerName(template.customerName);
+    setPickup(template.pickupLocation);
+    setDrop(template.dropLocation);
+    setRate(String(template.defaultRate));
+  }
 
   function reset() {
+    setTemplateId("");
+    setCustomerId("");
     setCustomerName("");
     setPickup("");
     setDrop("");
@@ -81,6 +120,7 @@ export default function AddLoadForm({ open, onClose, onAdd }: AddLoadFormProps) 
   }
 
   return (
+    <>
     <Modal
       open={open}
       onClose={handleClose}
@@ -108,13 +148,36 @@ export default function AddLoadForm({ open, onClose, onAdd }: AddLoadFormProps) 
     >
       <form id="add-load-form" onSubmit={handleSubmit} noValidate className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-1.5">Customer name</label>
-          <input
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
-            placeholder="e.g. Bansal Traders"
+          <label className="block text-sm font-medium mb-1.5">{TT.label}</label>
+          <select
+            value={templateId}
+            onChange={(e) => handleTemplateChange(e.target.value)}
+            className="w-full rounded-lg border px-3.5 py-2.5 text-sm bg-transparent outline-none transition-colors focus:ring-2 focus:ring-blue-600/20 border-blue-600/10 dark:border-blue-400/10 focus:border-blue-600"
+          >
+            <option value="">{TT.noneOption}</option>
+            {mockLoadTemplates.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1.5">{CT.label}</label>
+          <select
+            value={customerId}
+            onChange={(e) => handleCustomerChange(e.target.value)}
             className={inputClass(Boolean(errors.customer_name))}
-          />
+          >
+            <option value="">{CT.placeholder}</option>
+            {customers.map((customer) => (
+              <option key={customer.id} value={customer.id}>
+                {customer.name}
+              </option>
+            ))}
+            <option value={ADD_NEW_CUSTOMER}>{CT.addNewOption}</option>
+          </select>
           {errors.customer_name && <p className="mt-1.5 text-xs text-red-500">{errors.customer_name}</p>}
         </div>
 
@@ -167,5 +230,11 @@ export default function AddLoadForm({ open, onClose, onAdd }: AddLoadFormProps) 
         </div>
       </form>
     </Modal>
+      <AddCustomerForm
+        open={showAddCustomer}
+        onClose={() => setShowAddCustomer(false)}
+        onAdd={handleNewCustomer}
+      />
+    </>
   );
 }

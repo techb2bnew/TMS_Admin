@@ -6,17 +6,19 @@ import PageHeader from "@/components/ui/PageHeader";
 import StatCard from "@/components/ui/StatCard";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Toast from "@/components/ui/Toast";
-import { LoadsIcon, DriversIcon, FleetIcon } from "@/components/icons";
+import AddDriverForm from "@/components/forms/AddDriverForm";
+import { LoadsIcon, DriversIcon, FleetIcon, PlusIcon } from "@/components/icons";
 import { mockLoads } from "@/lib/mock/loads";
 import { mockDrivers } from "@/lib/mock/drivers";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/useToast";
-import type { Load } from "@/types";
+import type { Driver, Load } from "@/types";
 
 const T = APP_TEXT.dispatch;
 
 export default function DispatchPage() {
   const [loads, setLoads] = useState<Load[]>(mockLoads);
+  const [drivers, setDrivers] = useState<Driver[]>(mockDrivers);
   const [busyDriverIds, setBusyDriverIds] = useState<Set<string>>(
     new Set(
       mockLoads
@@ -27,12 +29,18 @@ export default function DispatchPage() {
   );
   const [selectedDriver, setSelectedDriver] = useState<Record<string, string>>({});
   const [confirmTarget, setConfirmTarget] = useState<{ loadId: string; driverId: string } | null>(null);
+  const [showAddDriver, setShowAddDriver] = useState(false);
   const { message, showToast } = useToast();
 
   const unassignedLoads = loads.filter((l) => l.status === "pending");
-  const availableDrivers = mockDrivers.filter(
+  const availableDrivers = drivers.filter(
     (d) => d.status === "active" && d.truck_number && !busyDriverIds.has(d.id)
   );
+
+  function handleAddDriver(driver: Driver) {
+    setDrivers((prev) => [driver, ...prev]);
+    showToast(`${driver.full_name} added`);
+  }
 
   function requestAssign(loadId: string) {
     const driverId = selectedDriver[loadId];
@@ -43,7 +51,7 @@ export default function DispatchPage() {
   async function confirmAssign() {
     if (!confirmTarget) return;
     const { loadId, driverId } = confirmTarget;
-    const driver = mockDrivers.find((d) => d.id === driverId);
+    const driver = drivers.find((d) => d.id === driverId);
     if (!driver) return;
 
     await new Promise((r) => setTimeout(r, 500));
@@ -57,7 +65,7 @@ export default function DispatchPage() {
   }
 
   const confirmLoad = confirmTarget ? loads.find((l) => l.id === confirmTarget.loadId) : null;
-  const confirmDriver = confirmTarget ? mockDrivers.find((d) => d.id === confirmTarget.driverId) : null;
+  const confirmDriver = confirmTarget ? drivers.find((d) => d.id === confirmTarget.driverId) : null;
 
   return (
     <div>
@@ -107,9 +115,10 @@ export default function DispatchPage() {
                 <select
                   value={selectedDriver[load.id] ?? ""}
                   onChange={(e) => setSelectedDriver((prev) => ({ ...prev, [load.id]: e.target.value }))}
-                  className="flex-1 rounded-lg border border-blue-600/10 dark:border-blue-400/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-600 transition-colors"
+                  disabled={availableDrivers.length === 0}
+                  className="flex-1 rounded-lg border border-blue-600/10 dark:border-blue-400/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="">{T.selectDriver}</option>
+                  <option value="">{availableDrivers.length === 0 ? T.noAvailableDrivers : T.selectDriver}</option>
                   {availableDrivers.map((driver) => (
                     <option key={driver.id} value={driver.id}>
                       {driver.full_name} — {driver.truck_number}
@@ -129,10 +138,19 @@ export default function DispatchPage() {
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-sm font-medium opacity-70">{T.availableDriversTitle}</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-medium opacity-70">{T.availableDriversTitle}</h2>
+            <button
+              onClick={() => setShowAddDriver(true)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+            >
+              <PlusIcon className="w-3.5 h-3.5" />
+              {APP_TEXT.drivers.addDriver}
+            </button>
+          </div>
 
           <div className="rounded-xl border border-slate-200 bg-white shadow-sm divide-y divide-blue-600/5 dark:divide-blue-400/5 overflow-hidden">
-            {mockDrivers
+            {drivers
               .filter((d) => d.status === "active")
               .map((driver) => {
                 const busy = busyDriverIds.has(driver.id);
@@ -157,7 +175,7 @@ export default function DispatchPage() {
                 );
               })}
 
-            {mockDrivers.filter((d) => d.status === "active").length === 0 && (
+            {drivers.filter((d) => d.status === "active").length === 0 && (
               <div className="px-4 py-8 text-center text-xs opacity-50">{T.noAvailableDrivers}</div>
             )}
           </div>
@@ -183,6 +201,7 @@ export default function DispatchPage() {
           )
         }
       />
+      <AddDriverForm open={showAddDriver} onClose={() => setShowAddDriver(false)} onAdd={handleAddDriver} />
       <Toast message={message} />
     </div>
   );

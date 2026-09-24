@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { APP_TEXT } from "@/constants/text";
-import { AUTH_COOKIE_NAME, STATIC_ADMIN_CREDENTIALS } from "@/constants/auth";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { LogoutIcon } from "@/components/icons";
+import { createClient } from "@/lib/supabase/client";
 
 function getInitial(email: string) {
   return email[0]?.toUpperCase() ?? "A";
@@ -16,6 +16,12 @@ export default function AccountMenu() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [email, setEmail] = useState("");
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? ""));
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -27,8 +33,9 @@ export default function AccountMenu() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  function confirmLogout() {
-    document.cookie = `${AUTH_COOKIE_NAME}=; path=/; max-age=0`;
+  async function confirmLogout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
   }
@@ -39,14 +46,14 @@ export default function AccountMenu() {
         onClick={() => setOpen((v) => !v)}
         className="flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 text-white text-sm font-semibold shrink-0 hover:ring-2 hover:ring-blue-600/30 transition-all"
       >
-        {getInitial(STATIC_ADMIN_CREDENTIALS.email)}
+        {getInitial(email)}
       </button>
 
       {open && (
         <div className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden z-20">
           <div className="px-4 py-3 border-b border-blue-600/10 dark:border-blue-400/10">
             <div className="text-sm font-medium">Admin</div>
-            <div className="text-xs opacity-50 truncate">{STATIC_ADMIN_CREDENTIALS.email}</div>
+            <div className="text-xs opacity-50 truncate">{email}</div>
           </div>
           <button
             onClick={() => {

@@ -5,10 +5,11 @@ import PageHeader from "@/components/ui/PageHeader";
 import StatCard from "@/components/ui/StatCard";
 import RevenueBarChart from "@/components/charts/RevenueBarChart";
 import DriverLeaderboard from "@/components/charts/DriverLeaderboard";
-import { BillingIcon, ReportsIcon, LoadsIcon, DriversIcon, DownloadIcon } from "@/components/icons";
+import { BillingIcon, ReportsIcon, LoadsIcon, DriversIcon, DownloadIcon, ExpensesIcon } from "@/components/icons";
 import { mockWeeklyRevenue } from "@/lib/mock/revenue";
 import { mockDrivers } from "@/lib/mock/drivers";
 import { mockLoads } from "@/lib/mock/loads";
+import { mockExpenses } from "@/lib/mock/expenses";
 import { formatCurrency } from "@/lib/format";
 import { downloadCsv } from "@/lib/exportCsv";
 
@@ -22,6 +23,8 @@ export default function ReportsPage() {
   const onTimeRate = completedTotal > 0 ? Math.round((deliveredLoads.length / completedTotal) * 100) : 0;
   const avgRate = Math.round(mockLoads.reduce((sum, l) => sum + l.rate, 0) / mockLoads.length);
   const totalDeliveries = mockDrivers.reduce((sum, d) => sum + d.deliveries_count, 0);
+  const totalExpenses = mockExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const netProfit = totalRevenue - totalExpenses;
 
   const topDrivers = [...mockDrivers]
     .sort((a, b) => b.deliveries_count - a.deliveries_count)
@@ -37,6 +40,7 @@ export default function ReportsPage() {
       { metric: T.statOnTimeRate, value: `${onTimeRate}%` },
       { metric: T.statAvgRate, value: formatCurrency(avgRate) },
       { metric: T.statTotalDeliveries, value: totalDeliveries },
+      { metric: T.statNetProfit, value: formatCurrency(netProfit) },
     ]);
     downloadCsv(
       "top-drivers.csv",
@@ -60,11 +64,17 @@ export default function ReportsPage() {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <StatCard label={T.statTotalRevenue} value={formatCurrency(totalRevenue)} Icon={BillingIcon} accent="emerald" />
         <StatCard label={T.statOnTimeRate} value={`${onTimeRate}%`} Icon={ReportsIcon} accent="blue" />
         <StatCard label={T.statAvgRate} value={formatCurrency(avgRate)} Icon={LoadsIcon} accent="amber" />
         <StatCard label={T.statTotalDeliveries} value={totalDeliveries} Icon={DriversIcon} accent="blue" />
+        <StatCard
+          label={T.statNetProfit}
+          value={formatCurrency(netProfit)}
+          Icon={ExpensesIcon}
+          accent={netProfit >= 0 ? "emerald" : "red"}
+        />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">

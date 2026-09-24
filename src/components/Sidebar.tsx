@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { APP_TEXT } from "@/constants/text";
-import { AUTH_COOKIE_NAME, STATIC_ADMIN_CREDENTIALS } from "@/constants/auth";
-import { mockNotifications } from "@/lib/mock/notifications";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useSidebar } from "@/components/SidebarContext";
+import { createClient } from "@/lib/supabase/client";
 import {
   DashboardIcon,
   LoadsIcon,
@@ -17,9 +16,11 @@ import {
   TrackingIcon,
   BillingIcon,
   ReportsIcon,
-  NotificationsIcon,
   LogoutIcon,
   CloseIcon,
+  CustomersIcon,
+  ExpensesIcon,
+  TeamIcon,
 } from "@/components/icons";
 
 const NAV_GROUPS = [
@@ -30,6 +31,7 @@ const NAV_GROUPS = [
   {
     label: "Operations",
     items: [
+      { href: "/customers", label: APP_TEXT.nav.customers, Icon: CustomersIcon },
       { href: "/loads", label: APP_TEXT.nav.loads, Icon: LoadsIcon },
       { href: "/dispatch", label: APP_TEXT.nav.dispatch, Icon: DispatchIcon },
       { href: "/tracking", label: APP_TEXT.nav.tracking, Icon: TrackingIcon },
@@ -47,14 +49,52 @@ const NAV_GROUPS = [
     items: [
       { href: "/billing", label: APP_TEXT.nav.billing, Icon: BillingIcon },
       { href: "/reports", label: APP_TEXT.nav.reports, Icon: ReportsIcon },
+      { href: "/expenses", label: APP_TEXT.nav.expenses, Icon: ExpensesIcon },
     ],
   },
 ];
 
-const unreadAlerts = mockNotifications.filter((n) => !n.read).length;
-
 function getInitial(email: string) {
   return email[0]?.toUpperCase() ?? "A";
+}
+
+type NavItemProps = {
+  href: string;
+  label: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  active: boolean;
+  badge?: number;
+  onNavigate: () => void;
+};
+
+function NavItem({ href, label, Icon, active, badge, onNavigate }: NavItemProps) {
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      className={`group relative flex items-center gap-2.5 rounded-lg pl-2 pr-3 py-2 text-sm font-medium tracking-tight transition-all duration-150 ${
+        active
+          ? "bg-white text-blue-700 shadow-[0_2px_10px_rgba(37,99,235,0.15)]"
+          : "text-slate-600 hover:bg-white/60 hover:text-blue-700"
+      }`}
+    >
+      <span
+        className={`flex items-center justify-center w-8 h-8 rounded-lg shrink-0 transition-all duration-150 ${
+          active
+            ? "bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30"
+            : "bg-white/70 text-slate-400 group-hover:bg-white group-hover:text-blue-600"
+        }`}
+      >
+        <Icon className="w-4.5 h-4.5" />
+      </span>
+      <span className="flex-1 min-w-0 truncate">{label}</span>
+      {Boolean(badge) && (
+        <span className="flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-semibold px-1 shrink-0">
+          {badge}
+        </span>
+      )}
+    </Link>
+  );
 }
 
 export default function Sidebar() {
@@ -62,9 +102,16 @@ export default function Sidebar() {
   const router = useRouter();
   const { open, setOpen } = useSidebar();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [email, setEmail] = useState("");
 
-  function confirmLogout() {
-    document.cookie = `${AUTH_COOKIE_NAME}=; path=/; max-age=0`;
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? ""));
+  }, []);
+
+  async function confirmLogout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
   }
@@ -114,67 +161,51 @@ export default function Sidebar() {
         </button>
       </div>
 
-      <nav className="relative z-10 flex-1 overflow-y-auto px-3 py-4 space-y-5">
-        {NAV_GROUPS.map((group) => (
-          <div key={group.label}>
-            <div className="px-3 mb-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+      <nav className="relative z-10 flex-1 overflow-y-auto px-3 py-2.5 space-y-2.5">
+        {NAV_GROUPS.map((group, i) => (
+          <div key={group.label} className={i > 0 ? "pt-2.5 border-t border-blue-900/[0.06]" : undefined}>
+            <div className="px-2 mb-1 text-[10.5px] font-bold uppercase tracking-[0.1em] text-slate-400/90">
               {group.label}
             </div>
             <div className="space-y-0.5">
-              {group.items.map(({ href, label, Icon }) => {
-                const active = pathname === href;
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => setOpen(false)}
-                    className={`relative flex items-center gap-2.5 rounded-lg pl-3.5 pr-3 py-2.5 text-sm font-medium tracking-tight transition-colors ${
-                      active
-                        ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md shadow-blue-600/25"
-                        : "text-slate-600 hover:bg-white/70 hover:text-blue-700"
-                    }`}
-                  >
-                    <Icon className="w-5 h-5 shrink-0" />
-                    {label}
-                  </Link>
-                );
-              })}
+              {group.items.map(({ href, label, Icon }) => (
+                <NavItem
+                  key={href}
+                  href={href}
+                  label={label}
+                  Icon={Icon}
+                  active={pathname === href}
+                  onNavigate={() => setOpen(false)}
+                />
+              ))}
             </div>
           </div>
         ))}
 
-        <div>
-          <div className="px-3 mb-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
-            Alerts
+        <div className="pt-2.5 border-t border-blue-900/[0.06]">
+          <div className="px-2 mb-1 text-[10.5px] font-bold uppercase tracking-[0.1em] text-slate-400/90">
+            Admin
           </div>
-          <Link
-            href="/notifications"
-            onClick={() => setOpen(false)}
-            className={`relative flex items-center gap-2.5 rounded-lg pl-3.5 pr-3 py-2.5 text-sm font-medium tracking-tight transition-colors ${
-              pathname === "/notifications"
-                ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md shadow-blue-600/25"
-                : "text-slate-600 hover:bg-white/70 hover:text-blue-700"
-            }`}
-          >
-            <NotificationsIcon className="w-5 h-5 shrink-0" />
-            {APP_TEXT.nav.notifications}
-            {unreadAlerts > 0 && (
-              <span className="ml-auto flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-semibold px-1">
-                {unreadAlerts}
-              </span>
-            )}
-          </Link>
+          <div className="space-y-0.5">
+            <NavItem
+              href="/team"
+              label={APP_TEXT.nav.team}
+              Icon={TeamIcon}
+              active={pathname === "/team"}
+              onNavigate={() => setOpen(false)}
+            />
+          </div>
         </div>
       </nav>
 
       <div className="relative z-10 p-3 border-t border-blue-600/10 dark:border-blue-400/10">
         <div className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-white/70 transition-colors">
           <span className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 text-white text-xs font-semibold shrink-0">
-            {getInitial(STATIC_ADMIN_CREDENTIALS.email)}
+            {getInitial(email)}
           </span>
           <div className="min-w-0 flex-1">
             <div className="text-xs font-semibold text-slate-700 truncate">Admin</div>
-            <div className="text-[11px] text-slate-400 truncate">{STATIC_ADMIN_CREDENTIALS.email}</div>
+            <div className="text-[11px] text-slate-400 truncate">{email}</div>
           </div>
           <button
             onClick={() => setShowLogoutConfirm(true)}

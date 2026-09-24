@@ -1,40 +1,84 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { APP_TEXT } from "@/constants/text";
 import PageHeader from "@/components/ui/PageHeader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import Toast from "@/components/ui/Toast";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import LoadLogModal from "@/components/ui/LoadLogModal";
 import AddLoadForm from "@/components/forms/AddLoadForm";
-import { SearchIcon, PlusIcon } from "@/components/icons";
+import LogCheckCallForm from "@/components/forms/LogCheckCallForm";
+import { SearchIcon, PlusIcon, KebabIcon } from "@/components/icons";
 import { mockLoads } from "@/lib/mock/loads";
+import { mockCheckCalls } from "@/lib/mock/checkCalls";
+import { addMockInvoice } from "@/lib/mock/invoices";
 import { formatDate, formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/useToast";
-import type { Load, LoadStatus } from "@/types";
+import type { CheckCall, Invoice, Load } from "@/types";
 
 const T = APP_TEXT.loads;
+const A = APP_TEXT.loads.loadActions;
 
-const FILTERS: { key: LoadStatus | "all"; label: string }[] = [
-  { key: "all", label: T.filters.all },
-  { key: "pending", label: T.filters.pending },
-  { key: "assigned", label: T.filters.assigned },
-  { key: "picked_up", label: T.filters.picked_up },
-  { key: "in_transit", label: T.filters.in_transit },
-  { key: "delivered", label: T.filters.delivered },
+type LoadTab = "active" | "planning" | "readyForAccounting" | "all" | "cancelled";
+
+const TABS: { key: LoadTab; label: string }[] = [
+  { key: "active", label: T.loadTabs.active },
+  { key: "planning", label: T.loadTabs.planning },
+  { key: "readyForAccounting", label: T.loadTabs.readyForAccounting },
+  { key: "all", label: T.loadTabs.all },
+  { key: "cancelled", label: T.loadTabs.cancelled },
 ];
+
+const ACTIVE_STATUSES = ["assigned", "picked_up", "in_transit"];
+
+function matchesTab(load: Load, tab: LoadTab) {
+  switch (tab) {
+    case "active":
+      return ACTIVE_STATUSES.includes(load.status);
+    case "planning":
+      return load.status === "pending";
+    case "readyForAccounting":
+      return load.status === "delivered";
+    case "cancelled":
+      return load.status === "cancelled";
+    case "all":
+    default:
+      return true;
+  }
+}
 
 export default function LoadsView() {
   const searchParams = useSearchParams();
   const [loads, setLoads] = useState<Load[]>(mockLoads);
-  const [filter, setFilter] = useState<LoadStatus | "all">("all");
+  const [checkCalls, setCheckCalls] = useState<CheckCall[]>(mockCheckCalls);
+  const [tab, setTab] = useState<LoadTab>("active");
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Load | null>(null);
+  const [checkCallTarget, setCheckCallTarget] = useState<Load | null>(null);
+  const [logTarget, setLogTarget] = useState<Load | null>(null);
+  const [invoicedLoadIds, setInvoicedLoadIds] = useState<Set<string>>(new Set());
   const { message, showToast } = useToast();
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const copyCounterRef = useRef(0);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openMenuId]);
 
   const filteredLoads = useMemo(() => {
     return loads.filter((load) => {
-      const matchesFilter = filter === "all" || load.status === filter;
+      const matchesFilter = matchesTab(load, tab);
       const q = query.trim().toLowerCase();
       const matchesQuery =
         !q ||
@@ -44,11 +88,67 @@ export default function LoadsView() {
         load.drop_location.toLowerCase().includes(q);
       return matchesFilter && matchesQuery;
     });
-  }, [loads, filter, query]);
+  }, [loads, tab, query]);
 
   function handleAddLoad(load: Load) {
     setLoads((prev) => [load, ...prev]);
     showToast(`Load ${load.id} created`);
+  }
+
+  function handleCopyLoad(load: Load) {
+    setOpenMenuId(null);
+    copyCounterRef.current += 1;
+    const copy: Load = {
+      ...load,
+      id: `${load.id}-COPY${copyCounterRef.current}`,
+      status: "pending",
+      assigned_driver: null,
+      created_at: new Date().toISOString(),
+    };
+    setLoads((prev) => [copy, ...prev]);
+    showToast(A.copiedToast);
+  }
+
+  function handleArchiveLoad() {
+    setOpenMenuId(null);
+    showToast(A.archivedToast);
+  }
+
+  async function confirmCancelLoad() {
+    if (!cancelTarget) return;
+    await new Promise((r) => setTimeout(r, 300));
+    setLoads((prev) => prev.map((l) => (l.id === cancelTarget.id ? { ...l, status: "cancelled" } : l)));
+    showToast(A.cancelledToast);
+    setCancelTarget(null);
+  }
+
+  function handleSendToAccounting(load: Load) {
+    setOpenMenuId(null);
+    const invoice: Invoice = {
+      id: `INV-${load.id.replace(/\D/g, "") || Date.now()}`,
+      load_id: load.id,
+      customer_name: load.customer_name,
+      amount: load.rate,
+      status: "unpaid",
+      created_at: new Date().toISOString(),
+    };
+    addMockInvoice(invoice);
+    setInvoicedLoadIds((prev) => new Set(prev).add(load.id));
+    showToast(A.invoiceCreatedToast);
+  }
+
+  function handleLogCheckCall(note: string) {
+    if (!checkCallTarget) return;
+    const entry: CheckCall = {
+      id: `cc${Date.now()}`,
+      loadId: checkCallTarget.id,
+      note,
+      createdAt: new Date().toISOString(),
+      createdBy: "You",
+    };
+    setCheckCalls((prev) => [entry, ...prev]);
+    showToast(A.checkCallLoggedToast);
+    setCheckCallTarget(null);
   }
 
   return (
@@ -67,6 +167,22 @@ export default function LoadsView() {
         }
       />
 
+      <div className="flex flex-wrap gap-1.5 mb-5 border-b border-blue-600/10 dark:border-blue-400/10 pb-3">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`rounded-lg px-3.5 py-2 text-xs font-medium transition-colors ${
+              tab === t.key
+                ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-sm shadow-blue-600/25"
+                : "bg-slate-100 hover:bg-slate-200 opacity-70 hover:opacity-100"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <div className="relative flex-1 max-w-sm">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
@@ -76,22 +192,6 @@ export default function LoadsView() {
             placeholder={T.searchPlaceholder}
             className="w-full rounded-lg border border-blue-600/10 dark:border-blue-400/10 bg-transparent pl-9 pr-3 py-2.5 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 transition-colors"
           />
-        </div>
-
-        <div className="flex flex-wrap gap-1.5">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                filter === f.key
-                  ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-sm shadow-blue-600/25"
-                  : "bg-slate-100 hover:bg-slate-200 opacity-70 hover:opacity-100"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -108,6 +208,7 @@ export default function LoadsView() {
               <th className="font-medium px-5 py-3">{T.table.driver}</th>
               <th className="font-medium px-5 py-3">{T.table.status}</th>
               <th className="font-medium px-5 py-3">{T.table.created}</th>
+              <th className="font-medium px-5 py-3 text-right">{T.table.actions}</th>
             </tr>
           </thead>
           <tbody>
@@ -128,12 +229,76 @@ export default function LoadsView() {
                   <StatusBadge status={load.status} />
                 </td>
                 <td className="px-5 py-3.5 opacity-50 whitespace-nowrap">{formatDate(load.created_at)}</td>
+                <td className="px-5 py-3.5 text-right relative">
+                  <button
+                    onClick={() => setOpenMenuId(openMenuId === load.id ? null : load.id)}
+                    title={A.menuLabel}
+                    className="inline-flex items-center justify-center w-7 h-7 rounded-lg opacity-60 hover:opacity-100 hover:bg-slate-100 transition-colors"
+                  >
+                    <KebabIcon className="w-4 h-4" />
+                  </button>
+
+                  {openMenuId === load.id && (
+                    <div
+                      ref={menuRef}
+                      className="absolute right-5 top-11 z-10 w-48 rounded-lg border border-slate-200 bg-white shadow-lg py-1.5 text-left"
+                    >
+                      <button
+                        onClick={() => handleCopyLoad(load)}
+                        className="w-full text-left px-3.5 py-2 text-xs hover:bg-slate-50 transition-colors"
+                      >
+                        {A.copyLoad}
+                      </button>
+                      <button
+                        onClick={handleArchiveLoad}
+                        className="w-full text-left px-3.5 py-2 text-xs hover:bg-slate-50 transition-colors"
+                      >
+                        {A.archiveLoad}
+                      </button>
+                      {load.status === "delivered" && !invoicedLoadIds.has(load.id) && (
+                        <button
+                          onClick={() => handleSendToAccounting(load)}
+                          className="w-full text-left px-3.5 py-2 text-xs text-blue-600 hover:bg-blue-50 transition-colors"
+                        >
+                          {A.sendToAccounting}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setOpenMenuId(null);
+                          setCheckCallTarget(load);
+                        }}
+                        className="w-full text-left px-3.5 py-2 text-xs hover:bg-slate-50 transition-colors"
+                      >
+                        {A.logCheckCall}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setOpenMenuId(null);
+                          setLogTarget(load);
+                        }}
+                        className="w-full text-left px-3.5 py-2 text-xs hover:bg-slate-50 transition-colors"
+                      >
+                        {A.viewLoadLog}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setOpenMenuId(null);
+                          setCancelTarget(load);
+                        }}
+                        className="w-full text-left px-3.5 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        {A.cancelLoad}
+                      </button>
+                    </div>
+                  )}
+                </td>
               </tr>
             ))}
 
             {filteredLoads.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-5 py-10 text-center text-sm opacity-50">
+                <td colSpan={9} className="px-5 py-10 text-center text-sm opacity-50">
                   {T.emptyState}
                 </td>
               </tr>
@@ -144,6 +309,30 @@ export default function LoadsView() {
       </div>
 
       <AddLoadForm open={showAddForm} onClose={() => setShowAddForm(false)} onAdd={handleAddLoad} />
+
+      <ConfirmDialog
+        open={Boolean(cancelTarget)}
+        onClose={() => setCancelTarget(null)}
+        onConfirm={confirmCancelLoad}
+        title={A.cancelConfirmTitle}
+        message={A.cancelConfirmMessage}
+        tone="danger"
+      />
+
+      <LogCheckCallForm
+        open={Boolean(checkCallTarget)}
+        loadId={checkCallTarget?.id ?? null}
+        onClose={() => setCheckCallTarget(null)}
+        onSubmit={handleLogCheckCall}
+      />
+
+      <LoadLogModal
+        open={Boolean(logTarget)}
+        load={logTarget}
+        checkCalls={checkCalls}
+        onClose={() => setLogTarget(null)}
+      />
+
       <Toast message={message} />
     </div>
   );

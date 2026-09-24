@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { APP_TEXT } from "@/constants/text";
-import { AUTH_COOKIE_NAME, STATIC_ADMIN_CREDENTIALS } from "@/constants/auth";
 import { isValidEmail } from "@/lib/validation";
+import { createClient } from "@/lib/supabase/client";
 
 const T = APP_TEXT.login;
 
@@ -48,21 +49,33 @@ export default function LoginPage() {
 
     setIsSubmitting(true);
 
-    // Static credential check — intentional, admin login stays hardcoded
-    // even once the rest of the app connects to Supabase.
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    const supabase = createClient();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
 
-    const isValid =
-      email.trim().toLowerCase() === STATIC_ADMIN_CREDENTIALS.email &&
-      password === STATIC_ADMIN_CREDENTIALS.password;
-
-    if (!isValid) {
+    if (error || !data.user) {
       setFormError(T.errors.invalidCredentials);
       setIsSubmitting(false);
       return;
     }
 
-    document.cookie = `${AUTH_COOKIE_NAME}=true; path=/; max-age=${60 * 60 * 8}`;
+    // Only a profile with role "admin" may use this panel — a driver
+    // account signing in here gets rejected and signed back out.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", data.user.id)
+      .single();
+
+    if (profile?.role !== "admin") {
+      await supabase.auth.signOut();
+      setFormError(T.errors.invalidCredentials);
+      setIsSubmitting(false);
+      return;
+    }
+
     router.push("/");
     router.refresh();
   }
@@ -252,7 +265,18 @@ export default function LoginPage() {
       {/* Footer bar */}
       <div className="relative z-10 flex items-center justify-between px-6 sm:px-12 lg:px-20 py-5 text-xs text-slate-400 border-t border-slate-300/40">
         <span>{APP_TEXT.app.tagline}</span>
-        <span>© 2026 {APP_TEXT.app.name}</span>
+        <div className="flex items-center gap-5">
+          <Link href="/privacy-policy" className="hover:text-blue-600">
+            {APP_TEXT.privacyPolicy.title}
+          </Link>
+          <Link href="/terms-of-service" className="hover:text-blue-600">
+            {APP_TEXT.termsOfService.title}
+          </Link>
+          <Link href="/support" className="hover:text-blue-600">
+            {APP_TEXT.support.title}
+          </Link>
+          <span>© 2026 {APP_TEXT.app.name}</span>
+        </div>
       </div>
     </div>
   );
