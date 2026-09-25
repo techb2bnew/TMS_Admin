@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import Modal from "@/components/ui/Modal";
 import { APP_TEXT } from "@/constants/text";
 import { isValidEmail } from "@/lib/validation";
+import { createClient } from "@/lib/supabase/client";
 import type { Customer } from "@/types";
 
 const C = APP_TEXT.common;
@@ -32,6 +33,7 @@ export default function AddCustomerForm({ open, onClose, onAdd }: AddCustomerFor
   const [billingAddress, setBillingAddress] = useState("");
   const [paymentTerms, setPaymentTerms] = useState(PAYMENT_TERMS[1]);
   const [errors, setErrors] = useState<Errors>({});
+  const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   function reset() {
@@ -42,6 +44,7 @@ export default function AddCustomerForm({ open, onClose, onAdd }: AddCustomerFor
     setBillingAddress("");
     setPaymentTerms(PAYMENT_TERMS[1]);
     setErrors({});
+    setFormError("");
   }
 
   function handleClose() {
@@ -63,24 +66,44 @@ export default function AddCustomerForm({ open, onClose, onAdd }: AddCustomerFor
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setFormError("");
     if (!validate()) return;
 
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 400));
+
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("customers")
+      .insert({
+        name: name.trim(),
+        contact_person: contactPerson.trim(),
+        phone: phone.trim(),
+        email: email.trim(),
+        billing_address: billingAddress.trim(),
+        payment_terms: paymentTerms,
+      })
+      .select("id, name, contact_person, phone, email, billing_address, payment_terms, created_at")
+      .single();
+
+    setSubmitting(false);
+
+    if (error || !data) {
+      setFormError(error?.message ?? "Could not add customer");
+      return;
+    }
 
     const customer: Customer = {
-      id: `c${Date.now()}`,
-      name: name.trim(),
-      contactPerson: contactPerson.trim(),
-      phone: phone.trim(),
-      email: email.trim(),
-      billingAddress: billingAddress.trim(),
-      paymentTerms,
-      createdAt: new Date().toISOString().slice(0, 10),
+      id: data.id,
+      name: data.name,
+      contactPerson: data.contact_person ?? "",
+      phone: data.phone ?? "",
+      email: data.email ?? "",
+      billingAddress: data.billing_address ?? "",
+      paymentTerms: data.payment_terms,
+      createdAt: data.created_at,
     };
 
     onAdd(customer);
-    setSubmitting(false);
     reset();
     onClose();
   }
@@ -141,6 +164,7 @@ export default function AddCustomerForm({ open, onClose, onAdd }: AddCustomerFor
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+91 98765 43210"
+              maxLength={16}
               className={inputClass(Boolean(errors.phone))}
             />
             {errors.phone && <p className="mt-1.5 text-xs text-red-500">{errors.phone}</p>}
@@ -149,8 +173,9 @@ export default function AddCustomerForm({ open, onClose, onAdd }: AddCustomerFor
             <label className="block text-sm font-medium mb-1.5">Email</label>
             <input
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => setEmail(e.target.value.toLowerCase())}
               placeholder="contact@company.com"
+              autoCapitalize="none"
               className={inputClass(Boolean(errors.email))}
             />
             {errors.email && <p className="mt-1.5 text-xs text-red-500">{errors.email}</p>}
@@ -181,6 +206,12 @@ export default function AddCustomerForm({ open, onClose, onAdd }: AddCustomerFor
             ))}
           </select>
         </div>
+
+        {formError && (
+          <div className="rounded-lg bg-red-50 border border-red-200 px-3.5 py-2.5 text-sm text-red-600">
+            {formError}
+          </div>
+        )}
       </form>
     </Modal>
   );

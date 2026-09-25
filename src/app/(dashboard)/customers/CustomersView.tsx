@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { APP_TEXT } from "@/constants/text";
 import PageHeader from "@/components/ui/PageHeader";
@@ -8,18 +8,54 @@ import StatCard from "@/components/ui/StatCard";
 import Toast from "@/components/ui/Toast";
 import AddCustomerForm from "@/components/forms/AddCustomerForm";
 import { SearchIcon, PlusIcon, CustomersIcon, BillingIcon } from "@/components/icons";
-import { mockCustomers } from "@/lib/mock/customers";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/lib/useToast";
 import type { Customer } from "@/types";
 
 const T = APP_TEXT.customers;
 
+type CustomerRow = {
+  id: string;
+  name: string;
+  contact_person: string | null;
+  phone: string | null;
+  email: string | null;
+  billing_address: string | null;
+  payment_terms: string;
+  created_at: string;
+};
+
+function toCustomer(row: CustomerRow): Customer {
+  return {
+    id: row.id,
+    name: row.name,
+    contactPerson: row.contact_person ?? "",
+    phone: row.phone ?? "",
+    email: row.email ?? "",
+    billingAddress: row.billing_address ?? "",
+    paymentTerms: row.payment_terms,
+    createdAt: row.created_at,
+  };
+}
+
 function CustomersView() {
   const searchParams = useSearchParams();
-  const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [showAddForm, setShowAddForm] = useState(false);
   const { message, showToast } = useToast();
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("customers")
+        .select("id, name, contact_person, phone, email, billing_address, payment_terms, created_at")
+        .order("created_at", { ascending: false });
+      setCustomers((data ?? []).map(toCustomer));
+    }
+    load();
+  }, []);
 
   const filteredCustomers = useMemo(() => {
     const q = query.trim().toLowerCase();

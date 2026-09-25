@@ -34,7 +34,7 @@ export default function LoadLogModal({ open, load, checkCalls, onClose }: LoadLo
       open={open}
       onClose={onClose}
       title={T.loadLogTitle}
-      subtitle={`${T.loadLogSubtitlePrefix} ${load.id}`}
+      subtitle={`${T.loadLogSubtitlePrefix} ${load.load_number}`}
     >
       {entries.length === 0 ? (
         <p className="text-sm opacity-50 text-center py-6">{T.loadLogEmpty}</p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { APP_TEXT } from "@/constants/text";
 import PageHeader from "@/components/ui/PageHeader";
 import StatCard from "@/components/ui/StatCard";
@@ -8,7 +8,7 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Toast from "@/components/ui/Toast";
 import { SearchIcon, BillingIcon, ReportsIcon, DownloadIcon } from "@/components/icons";
-import { mockInvoices as initialInvoices, mockSettlements as initialSettlements } from "@/lib/mock/invoices";
+import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { downloadCsv } from "@/lib/exportCsv";
 import { useToast } from "@/lib/useToast";
@@ -23,13 +23,61 @@ const FILTERS: { key: InvoiceStatus | "all"; label: string }[] = [
 ];
 
 export default function BillingPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
-  const [settlements, setSettlements] = useState<Settlement[]>(initialSettlements);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [filter, setFilter] = useState<InvoiceStatus | "all">("all");
   const [query, setQuery] = useState("");
   const [payInvoiceTarget, setPayInvoiceTarget] = useState<Invoice | null>(null);
   const [paySettlementTarget, setPaySettlementTarget] = useState<Settlement | null>(null);
   const { message, showToast } = useToast();
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient();
+      const [{ data: invoicesData }, { data: settlementsData }] = await Promise.all([
+        supabase
+          .from("invoices")
+          .select("id, amount, status, created_at, loads(load_number, customer_name)")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("settlements")
+          .select("id, amount, status, created_at, loads(load_number), drivers(profiles(full_name))")
+          .order("created_at", { ascending: false }),
+      ]);
+
+      setInvoices(
+        (invoicesData ?? []).map((i) => {
+          const loadInfo = (i as unknown as { loads: { load_number: string; customer_name: string } | null }).loads;
+          return {
+            id: i.id,
+            load_id: loadInfo?.load_number ?? "—",
+            customer_name: loadInfo?.customer_name ?? "—",
+            amount: i.amount,
+            status: i.status,
+            created_at: i.created_at,
+          };
+        })
+      );
+
+      setSettlements(
+        (settlementsData ?? []).map((s) => {
+          const loadInfo = (s as unknown as { loads: { load_number: string } | null }).loads;
+          const driverInfo = (
+            s as unknown as { drivers: { profiles: { full_name: string } | null } | null }
+          ).drivers;
+          return {
+            id: s.id,
+            load_id: loadInfo?.load_number ?? "—",
+            driver_name: driverInfo?.profiles?.full_name ?? "—",
+            amount: s.amount,
+            status: s.status,
+            created_at: s.created_at,
+          };
+        })
+      );
+    }
+    load();
+  }, []);
 
   const totalRevenue = invoices.filter((i) => i.status === "paid").reduce((sum, i) => sum + i.amount, 0);
   const pendingAmount = invoices.filter((i) => i.status === "unpaid").reduce((sum, i) => sum + i.amount, 0);
@@ -38,21 +86,32 @@ export default function BillingPage() {
 
   async function confirmPayInvoice() {
     if (!payInvoiceTarget) return;
-    await new Promise((r) => setTimeout(r, 400));
-    setInvoices((prev) =>
-      prev.map((i) => (i.id === payInvoiceTarget.id ? { ...i, status: "paid" } : i))
-    );
-    showToast(`${payInvoiceTarget.id} marked as paid`);
+    const supabase = createClient();
+    const { error } = await supabase.from("invoices").update({ status: "paid" }).eq("id", payInvoiceTarget.id);
+
+    if (!error) {
+      setInvoices((prev) =>
+        prev.map((i) => (i.id === payInvoiceTarget.id ? { ...i, status: "paid" } : i))
+      );
+      showToast(`${payInvoiceTarget.load_id} marked as paid`);
+    }
     setPayInvoiceTarget(null);
   }
 
   async function confirmPaySettlement() {
     if (!paySettlementTarget) return;
-    await new Promise((r) => setTimeout(r, 400));
-    setSettlements((prev) =>
-      prev.map((s) => (s.id === paySettlementTarget.id ? { ...s, status: "paid" } : s))
-    );
-    showToast(`${paySettlementTarget.id} marked as paid`);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("settlements")
+      .update({ status: "paid" })
+      .eq("id", paySettlementTarget.id);
+
+    if (!error) {
+      setSettlements((prev) =>
+        prev.map((s) => (s.id === paySettlementTarget.id ? { ...s, status: "paid" } : s))
+      );
+      showToast(`${paySettlementTarget.load_id} marked as paid`);
+    }
     setPaySettlementTarget(null);
   }
 
@@ -155,7 +214,7 @@ export default function BillingPage() {
                 key={invoice.id}
                 className="border-t border-blue-600/5 dark:border-blue-400/5 hover:bg-blue-50/60 transition-colors"
               >
-                <td className="px-5 py-3.5 font-medium">{invoice.id}</td>
+                <td className="px-5 py-3.5 font-medium">{invoice.id.slice(0, 8)}</td>
                 <td className="px-5 py-3.5 opacity-70">{invoice.load_id}</td>
                 <td className="px-5 py-3.5 opacity-80">{invoice.customer_name}</td>
                 <td className="px-5 py-3.5 opacity-80">{formatCurrency(invoice.amount)}</td>
@@ -226,6 +285,14 @@ export default function BillingPage() {
                 </td>
               </tr>
             ))}
+
+            {settlements.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-5 py-10 text-center text-sm opacity-50">
+                  {T.emptyState}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
         </div>
@@ -240,8 +307,8 @@ export default function BillingPage() {
         message={
           payInvoiceTarget ? (
             <>
-              Mark invoice{" "}
-              <span className="font-medium text-black dark:text-white">{payInvoiceTarget.id}</span> for{" "}
+              Mark invoice for load{" "}
+              <span className="font-medium text-black dark:text-white">{payInvoiceTarget.load_id}</span> —{" "}
               {payInvoiceTarget.customer_name} ({formatCurrency(payInvoiceTarget.amount)}) as paid?
             </>
           ) : (
@@ -258,8 +325,8 @@ export default function BillingPage() {
         message={
           paySettlementTarget ? (
             <>
-              Mark settlement{" "}
-              <span className="font-medium text-black dark:text-white">{paySettlementTarget.id}</span> for{" "}
+              Mark settlement for load{" "}
+              <span className="font-medium text-black dark:text-white">{paySettlementTarget.load_id}</span> —{" "}
               {paySettlementTarget.driver_name} ({formatCurrency(paySettlementTarget.amount)}) as paid?
             </>
           ) : (

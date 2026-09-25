@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Modal from "@/components/ui/Modal";
 import { APP_TEXT } from "@/constants/text";
-import { mockDrivers } from "@/lib/mock/drivers";
+import { createClient } from "@/lib/supabase/client";
 import type { Truck } from "@/types";
 
 const C = APP_TEXT.common;
@@ -27,8 +27,8 @@ export default function AddTruckForm({ open, onClose, onAdd }: AddTruckFormProps
   const [capacity, setCapacity] = useState("");
   const [insuranceExpiry, setInsuranceExpiry] = useState("");
   const [lastMaintenance, setLastMaintenance] = useState("");
-  const [assignedDriver, setAssignedDriver] = useState("");
   const [errors, setErrors] = useState<Errors>({});
+  const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   function reset() {
@@ -36,8 +36,8 @@ export default function AddTruckForm({ open, onClose, onAdd }: AddTruckFormProps
     setCapacity("");
     setInsuranceExpiry("");
     setLastMaintenance("");
-    setAssignedDriver("");
     setErrors({});
+    setFormError("");
   }
 
   function handleClose() {
@@ -57,23 +57,34 @@ export default function AddTruckForm({ open, onClose, onAdd }: AddTruckFormProps
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setFormError("");
     if (!validate()) return;
 
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 400));
 
-    const truck: Truck = {
-      id: `t${Date.now()}`,
-      truck_number: truckNumber.trim(),
-      capacity_kg: Number(capacity),
-      status: "active",
-      insurance_expiry: insuranceExpiry,
-      last_maintenance: lastMaintenance || new Date().toISOString().slice(0, 10),
-      assigned_driver: assignedDriver.trim() || null,
-    };
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("trucks")
+      .insert({
+        truck_number: truckNumber.trim(),
+        capacity_kg: Number(capacity),
+        status: "active",
+        insurance_expiry: insuranceExpiry,
+        last_maintenance: lastMaintenance || new Date().toISOString().slice(0, 10),
+      })
+      .select("id, truck_number, capacity_kg, status, insurance_expiry, last_maintenance")
+      .single();
+
+    setSubmitting(false);
+
+    if (error || !data) {
+      setFormError(error?.message ?? "Could not add truck");
+      return;
+    }
+
+    const truck: Truck = { ...data, assigned_driver: null };
 
     onAdd(truck);
-    setSubmitting(false);
     reset();
     onClose();
   }
@@ -109,7 +120,7 @@ export default function AddTruckForm({ open, onClose, onAdd }: AddTruckFormProps
           <label className="block text-sm font-medium mb-1.5">Truck number</label>
           <input
             value={truckNumber}
-            onChange={(e) => setTruckNumber(e.target.value)}
+            onChange={(e) => setTruckNumber(e.target.value.toUpperCase())}
             placeholder="e.g. PB-11-TA-4521"
             className={inputClass(Boolean(errors.truck_number))}
           />
@@ -150,23 +161,11 @@ export default function AddTruckForm({ open, onClose, onAdd }: AddTruckFormProps
           <p className="mt-1.5 text-xs opacity-50">Leave blank to use today&apos;s date</p>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1.5">Primary driver (optional)</label>
-          <select
-            value={assignedDriver}
-            onChange={(e) => setAssignedDriver(e.target.value)}
-            className={inputClass(false)}
-          >
-            <option value="">No driver assigned</option>
-            {mockDrivers
-              .filter((d) => d.status === "active")
-              .map((d) => (
-                <option key={d.id} value={d.full_name}>
-                  {d.full_name}
-                </option>
-              ))}
-          </select>
-        </div>
+        {formError && (
+          <div className="rounded-lg bg-red-50 border border-red-200 px-3.5 py-2.5 text-sm text-red-600">
+            {formError}
+          </div>
+        )}
       </form>
     </Modal>
   );

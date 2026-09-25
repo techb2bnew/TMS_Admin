@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Modal from "@/components/ui/Modal";
 import { APP_TEXT } from "@/constants/text";
-import { mockTrucks } from "@/lib/mock/trucks";
+import { createClient } from "@/lib/supabase/client";
 import type { Expense, ExpenseCategory } from "@/types";
 
 const C = APP_TEXT.common;
 
 const CATEGORIES: ExpenseCategory[] = ["Fuel", "Tolls", "Maintenance", "Insurance", "Other"];
+
+type TruckOption = { id: string; truck_number: string };
 
 type Errors = Partial<Record<"amount" | "truckNumber" | "date", string>>;
 
@@ -25,21 +27,34 @@ function inputClass(hasError: boolean) {
 }
 
 export default function AddExpenseForm({ open, onClose, onAdd }: AddExpenseFormProps) {
+  const [trucks, setTrucks] = useState<TruckOption[]>([]);
   const [category, setCategory] = useState<ExpenseCategory>("Fuel");
   const [amount, setAmount] = useState("");
-  const [truckNumber, setTruckNumber] = useState("");
+  const [truckId, setTruckId] = useState("");
   const [date, setDate] = useState("");
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Errors>({});
+  const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    async function load() {
+      const supabase = createClient();
+      const { data } = await supabase.from("trucks").select("id, truck_number");
+      setTrucks(data ?? []);
+    }
+    load();
+  }, [open]);
 
   function reset() {
     setCategory("Fuel");
     setAmount("");
-    setTruckNumber("");
+    setTruckId("");
     setDate("");
     setNotes("");
     setErrors({});
+    setFormError("");
   }
 
   function handleClose() {
@@ -50,7 +65,7 @@ export default function AddExpenseForm({ open, onClose, onAdd }: AddExpenseFormP
   function validate() {
     const next: Errors = {};
     if (!amount.trim() || Number.isNaN(Number(amount)) || Number(amount) <= 0) next.amount = C.invalidNumber;
-    if (!truckNumber.trim()) next.truckNumber = C.required;
+    if (!truckId.trim()) next.truckNumber = C.required;
     if (!date.trim()) next.date = C.required;
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -58,22 +73,49 @@ export default function AddExpenseForm({ open, onClose, onAdd }: AddExpenseFormP
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setFormError("");
     if (!validate()) return;
 
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 400));
+
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const { data, error } = await supabase
+      .from("expenses")
+      .insert({
+        category,
+        amount: Number(amount),
+        truck_id: truckId,
+        date,
+        notes: notes.trim(),
+        status: "approved",
+        created_by: user?.id ?? null,
+      })
+      .select("id, category, amount, date, notes, truck_id")
+      .single();
+
+    setSubmitting(false);
+
+    if (error || !data) {
+      setFormError(error?.message ?? "Could not add expense");
+      return;
+    }
+
+    const truckNumber = trucks.find((t) => t.id === truckId)?.truck_number ?? "";
 
     const expense: Expense = {
-      id: `e${Date.now()}`,
-      category,
-      amount: Number(amount),
-      truckNumber: truckNumber.trim(),
-      date,
-      notes: notes.trim(),
+      id: data.id,
+      category: data.category,
+      amount: data.amount,
+      truckNumber,
+      date: data.date,
+      notes: data.notes ?? "",
     };
 
     onAdd(expense);
-    setSubmitting(false);
     reset();
     onClose();
   }
@@ -147,19 +189,25 @@ export default function AddExpenseForm({ open, onClose, onAdd }: AddExpenseFormP
         <div>
           <label className="block text-sm font-medium mb-1.5">Truck</label>
           <select
-            value={truckNumber}
-            onChange={(e) => setTruckNumber(e.target.value)}
+            value={truckId}
+            onChange={(e) => setTruckId(e.target.value)}
             className={inputClass(Boolean(errors.truckNumber))}
           >
             <option value="">Select a truck</option>
-            {mockTrucks.map((t) => (
-              <option key={t.id} value={t.truck_number}>
+            {trucks.map((t) => (
+              <option key={t.id} value={t.id}>
                 {t.truck_number}
               </option>
             ))}
           </select>
           {errors.truckNumber && <p className="mt-1.5 text-xs text-red-500">{errors.truckNumber}</p>}
         </div>
+
+        {formError && (
+          <div className="rounded-lg bg-red-50 border border-red-200 px-3.5 py-2.5 text-sm text-red-600">
+            {formError}
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium mb-1.5">Notes (optional)</label>

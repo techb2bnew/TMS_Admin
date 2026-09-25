@@ -1,71 +1,158 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { APP_TEXT } from "@/constants/text";
 import PageHeader from "@/components/ui/PageHeader";
 import StatCard from "@/components/ui/StatCard";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Toast from "@/components/ui/Toast";
 import AddDriverForm from "@/components/forms/AddDriverForm";
+import AddTruckForm from "@/components/forms/AddTruckForm";
 import { LoadsIcon, DriversIcon, FleetIcon, PlusIcon } from "@/components/icons";
-import { mockLoads } from "@/lib/mock/loads";
-import { mockDrivers } from "@/lib/mock/drivers";
+import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/useToast";
-import type { Driver, Load } from "@/types";
+import type { Driver, Load, LoadStatus, Truck } from "@/types";
 
 const T = APP_TEXT.dispatch;
+const ACTIVE_LOAD_STATUSES: LoadStatus[] = ["assigned", "picked_up", "in_transit"];
+const ADD_NEW_DRIVER = "__add_new_driver__";
+const ADD_NEW_TRUCK = "__add_new_truck__";
+
+type LoadRow = Load & { assigned_driver_id: string | null; assigned_truck_id: string | null };
 
 export default function DispatchPage() {
-  const [loads, setLoads] = useState<Load[]>(mockLoads);
-  const [drivers, setDrivers] = useState<Driver[]>(mockDrivers);
-  const [busyDriverIds, setBusyDriverIds] = useState<Set<string>>(
-    new Set(
-      mockLoads
-        .filter((l) => ["assigned", "picked_up", "in_transit"].includes(l.status) && l.assigned_driver)
-        .map((l) => mockDrivers.find((d) => d.full_name === l.assigned_driver)?.id)
-        .filter(Boolean) as string[]
-    )
-  );
+  const [loads, setLoads] = useState<LoadRow[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [trucks, setTrucks] = useState<Truck[]>([]);
   const [selectedDriver, setSelectedDriver] = useState<Record<string, string>>({});
-  const [confirmTarget, setConfirmTarget] = useState<{ loadId: string; driverId: string } | null>(null);
+  const [selectedTruck, setSelectedTruck] = useState<Record<string, string>>({});
+  const [confirmTarget, setConfirmTarget] = useState<{ loadId: string; driverId: string; truckId: string } | null>(
+    null
+  );
   const [showAddDriver, setShowAddDriver] = useState(false);
+  const [showAddTruck, setShowAddTruck] = useState(false);
+  const [pendingLoadId, setPendingLoadId] = useState<string | null>(null);
   const { message, showToast } = useToast();
 
-  const unassignedLoads = loads.filter((l) => l.status === "pending");
-  const availableDrivers = drivers.filter(
-    (d) => d.status === "active" && d.truck_number && !busyDriverIds.has(d.id)
+  useEffect(() => {
+    async function loadData() {
+      const supabase = createClient();
+      const [{ data: loadsData }, { data: driversData }, { data: trucksData }] = await Promise.all([
+        supabase
+          .from("loads")
+          .select(
+            "id, load_number, customer_name, pickup_location, drop_location, weight_kg, rate, status, assigned_driver_id, assigned_truck_id, created_at"
+          ),
+        supabase.from("drivers").select("id, status, license_number, created_at, profiles(full_name, phone)"),
+        supabase.from("trucks").select("id, truck_number, capacity_kg, status, insurance_expiry, last_maintenance"),
+      ]);
+
+      setLoads(
+        (loadsData ?? []).map((l) => ({ ...l, assigned_driver: null }))
+      );
+      setDrivers(
+        (driversData ?? []).map((d) => {
+          const profile = (d as unknown as { profiles: { full_name: string; phone: string } | null }).profiles;
+          return {
+            id: d.id,
+            full_name: profile?.full_name ?? "Unknown",
+            phone: profile?.phone ?? "",
+            license_number: d.license_number ?? "",
+            status: d.status as Driver["status"],
+            deliveries_count: 0,
+            joined_at: (d as unknown as { created_at: string }).created_at,
+            truck_number: null,
+            location: null,
+          };
+        })
+      );
+      setTrucks((trucksData ?? []).map((t) => ({ ...t, assigned_driver: null })));
+    }
+
+    loadData();
+  }, []);
+
+  const busyDriverIds = new Set(
+    loads.filter((l) => ACTIVE_LOAD_STATUSES.includes(l.status) && l.assigned_driver_id).map((l) => l.assigned_driver_id as string)
   );
+  const busyTruckIds = new Set(
+    loads.filter((l) => ACTIVE_LOAD_STATUSES.includes(l.status) && l.assigned_truck_id).map((l) => l.assigned_truck_id as string)
+  );
+
+  const unassignedLoads = loads.filter((l) => l.status === "pending");
+  const availableDrivers = drivers.filter((d) => d.status === "active" && !busyDriverIds.has(d.id));
+  const availableTrucks = trucks.filter((t) => t.status === "active" && !busyTruckIds.has(t.id));
 
   function handleAddDriver(driver: Driver) {
     setDrivers((prev) => [driver, ...prev]);
     showToast(`${driver.full_name} added`);
+    if (pendingLoadId) {
+      setSelectedDriver((prev) => ({ ...prev, [pendingLoadId]: driver.id }));
+      setPendingLoadId(null);
+    }
+  }
+
+  function handleAddTruck(truck: Truck) {
+    setTrucks((prev) => [truck, ...prev]);
+    showToast(`Truck ${truck.truck_number} added`);
+    if (pendingLoadId) {
+      setSelectedTruck((prev) => ({ ...prev, [pendingLoadId]: truck.id }));
+      setPendingLoadId(null);
+    }
+  }
+
+  function handleDriverSelectChange(loadId: string, value: string) {
+    if (value === ADD_NEW_DRIVER) {
+      setPendingLoadId(loadId);
+      setShowAddDriver(true);
+      return;
+    }
+    setSelectedDriver((prev) => ({ ...prev, [loadId]: value }));
+  }
+
+  function handleTruckSelectChange(loadId: string, value: string) {
+    if (value === ADD_NEW_TRUCK) {
+      setPendingLoadId(loadId);
+      setShowAddTruck(true);
+      return;
+    }
+    setSelectedTruck((prev) => ({ ...prev, [loadId]: value }));
   }
 
   function requestAssign(loadId: string) {
     const driverId = selectedDriver[loadId];
-    if (!driverId) return;
-    setConfirmTarget({ loadId, driverId });
+    const truckId = selectedTruck[loadId];
+    if (!driverId || !truckId) return;
+    setConfirmTarget({ loadId, driverId, truckId });
   }
 
   async function confirmAssign() {
     if (!confirmTarget) return;
-    const { loadId, driverId } = confirmTarget;
-    const driver = drivers.find((d) => d.id === driverId);
-    if (!driver) return;
+    const { loadId, driverId, truckId } = confirmTarget;
 
-    await new Promise((r) => setTimeout(r, 500));
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("loads")
+      .update({ status: "assigned", assigned_driver_id: driverId, assigned_truck_id: truckId })
+      .eq("id", loadId);
 
-    setLoads((prev) =>
-      prev.map((l) => (l.id === loadId ? { ...l, status: "assigned", assigned_driver: driver.full_name } : l))
-    );
-    setBusyDriverIds((prev) => new Set(prev).add(driver.id));
+    if (!error) {
+      setLoads((prev) =>
+        prev.map((l) =>
+          l.id === loadId ? { ...l, status: "assigned", assigned_driver_id: driverId, assigned_truck_id: truckId } : l
+        )
+      );
+      const driver = drivers.find((d) => d.id === driverId);
+      const loadLabel = loads.find((l) => l.id === loadId)?.load_number ?? loadId;
+      showToast(`${driver?.full_name ?? "Driver"} assigned to ${loadLabel}`);
+    }
     setConfirmTarget(null);
-    showToast(`${driver.full_name} assigned to ${loadId}`);
   }
 
   const confirmLoad = confirmTarget ? loads.find((l) => l.id === confirmTarget.loadId) : null;
   const confirmDriver = confirmTarget ? drivers.find((d) => d.id === confirmTarget.driverId) : null;
+  const confirmTruck = confirmTarget ? trucks.find((t) => t.id === confirmTarget.truckId) : null;
 
   return (
     <div>
@@ -97,7 +184,7 @@ export default function DispatchPage() {
                     <LoadsIcon className="w-4.5 h-4.5" />
                   </span>
                   <div>
-                    <div className="font-medium text-sm">{load.id}</div>
+                    <div className="font-medium text-sm">{load.load_number}</div>
                     <div className="text-xs opacity-60 mt-0.5">{load.customer_name}</div>
                   </div>
                 </div>
@@ -111,23 +198,36 @@ export default function DispatchPage() {
                 {load.pickup_location} → {load.drop_location}
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <select
                   value={selectedDriver[load.id] ?? ""}
-                  onChange={(e) => setSelectedDriver((prev) => ({ ...prev, [load.id]: e.target.value }))}
-                  disabled={availableDrivers.length === 0}
-                  className="flex-1 rounded-lg border border-blue-600/10 dark:border-blue-400/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onChange={(e) => handleDriverSelectChange(load.id, e.target.value)}
+                  className="flex-1 rounded-lg border border-blue-600/10 dark:border-blue-400/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-600 transition-colors"
                 >
                   <option value="">{availableDrivers.length === 0 ? T.noAvailableDrivers : T.selectDriver}</option>
                   {availableDrivers.map((driver) => (
                     <option key={driver.id} value={driver.id}>
-                      {driver.full_name} — {driver.truck_number}
+                      {driver.full_name}
                     </option>
                   ))}
+                  <option value={ADD_NEW_DRIVER}>+ Add New Driver</option>
+                </select>
+                <select
+                  value={selectedTruck[load.id] ?? ""}
+                  onChange={(e) => handleTruckSelectChange(load.id, e.target.value)}
+                  className="flex-1 rounded-lg border border-blue-600/10 dark:border-blue-400/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-600 transition-colors"
+                >
+                  <option value="">{availableTrucks.length === 0 ? "No trucks available" : "Select a truck"}</option>
+                  {availableTrucks.map((truck) => (
+                    <option key={truck.id} value={truck.id}>
+                      {truck.truck_number}
+                    </option>
+                  ))}
+                  <option value={ADD_NEW_TRUCK}>+ Add New Truck</option>
                 </select>
                 <button
                   onClick={() => requestAssign(load.id)}
-                  disabled={!selectedDriver[load.id]}
+                  disabled={!selectedDriver[load.id] || !selectedTruck[load.id]}
                   className="rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 transition-colors whitespace-nowrap"
                 >
                   {T.assign}
@@ -161,7 +261,6 @@ export default function DispatchPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium truncate">{driver.full_name}</div>
-                      <div className="text-xs opacity-50 truncate">{driver.truck_number}</div>
                     </div>
                     <span
                       className={`inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap ${
@@ -189,11 +288,11 @@ export default function DispatchPage() {
         title="Assign this load?"
         confirmLabel={T.assign}
         message={
-          confirmLoad && confirmDriver ? (
+          confirmLoad && confirmDriver && confirmTruck ? (
             <>
               Assign <span className="font-medium text-black dark:text-white">{confirmDriver.full_name}</span> (
-              {confirmDriver.truck_number}) to load{" "}
-              <span className="font-medium text-black dark:text-white">{confirmLoad.id}</span> —{" "}
+              {confirmTruck.truck_number}) to load{" "}
+              <span className="font-medium text-black dark:text-white">{confirmLoad.load_number}</span> —{" "}
               {confirmLoad.pickup_location} → {confirmLoad.drop_location}?
             </>
           ) : (
@@ -201,7 +300,22 @@ export default function DispatchPage() {
           )
         }
       />
-      <AddDriverForm open={showAddDriver} onClose={() => setShowAddDriver(false)} onAdd={handleAddDriver} />
+      <AddDriverForm
+        open={showAddDriver}
+        onClose={() => {
+          setShowAddDriver(false);
+          setPendingLoadId(null);
+        }}
+        onAdd={handleAddDriver}
+      />
+      <AddTruckForm
+        open={showAddTruck}
+        onClose={() => {
+          setShowAddTruck(false);
+          setPendingLoadId(null);
+        }}
+        onAdd={handleAddTruck}
+      />
       <Toast message={message} />
     </div>
   );

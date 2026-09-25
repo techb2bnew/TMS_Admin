@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { APP_TEXT } from "@/constants/text";
 import PageHeader from "@/components/ui/PageHeader";
@@ -9,10 +9,10 @@ import Toast from "@/components/ui/Toast";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import AddTruckForm from "@/components/forms/AddTruckForm";
 import { SearchIcon, PlusIcon, FleetIcon, ChevronDownIcon } from "@/components/icons";
-import { mockTrucks } from "@/lib/mock/trucks";
+import { createClient } from "@/lib/supabase/client";
 import { formatDateLong } from "@/lib/format";
 import { useToast } from "@/lib/useToast";
-import type { Truck, TruckStatus } from "@/types";
+import type { LoadStatus, Truck, TruckStatus } from "@/types";
 
 const T = APP_TEXT.fleet;
 
@@ -24,21 +24,52 @@ const FILTERS: { key: TruckStatus | "all"; label: string }[] = [
 ];
 
 const EXPIRY_WARNING_DAYS = 14;
-const TODAY = new Date("2026-09-21T12:00:00Z");
+const ACTIVE_LOAD_STATUSES: LoadStatus[] = ["assigned", "picked_up", "in_transit"];
 
 function daysUntil(iso: string) {
-  return Math.round((new Date(iso).getTime() - TODAY.getTime()) / 86400000);
+  return Math.round((new Date(iso).getTime() - Date.now()) / 86400000);
 }
 
 function FleetView() {
   const searchParams = useSearchParams();
-  const [trucks, setTrucks] = useState<Truck[]>(mockTrucks);
+  const [trucks, setTrucks] = useState<Truck[]>([]);
   const [filter, setFilter] = useState<TruckStatus | "all">("all");
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [showAddForm, setShowAddForm] = useState(false);
   const [maintenanceTarget, setMaintenanceTarget] = useState<Truck | null>(null);
   const [statusTarget, setStatusTarget] = useState<{ truck: Truck; newStatus: TruckStatus } | null>(null);
   const { message, showToast } = useToast();
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient();
+      const [{ data: trucksData }, { data: loadsData }] = await Promise.all([
+        supabase.from("trucks").select("id, truck_number, capacity_kg, status, insurance_expiry, last_maintenance"),
+        supabase
+          .from("loads")
+          .select("assigned_truck_id, status, drivers(profiles(full_name))")
+          .in("status", ACTIVE_LOAD_STATUSES),
+      ]);
+
+      const driverByTruckId = new Map(
+        (loadsData ?? [])
+          .filter((l) => l.assigned_truck_id)
+          .map((l) => [
+            l.assigned_truck_id as string,
+            (l as unknown as { drivers: { profiles: { full_name: string } | null } | null }).drivers?.profiles
+              ?.full_name ?? null,
+          ])
+      );
+
+      setTrucks(
+        (trucksData ?? []).map((t) => ({
+          ...t,
+          assigned_driver: driverByTruckId.get(t.id) ?? null,
+        }))
+      );
+    }
+    load();
+  }, []);
 
   const filteredTrucks = useMemo(() => {
     return trucks.filter((truck) => {
@@ -59,24 +90,33 @@ function FleetView() {
 
   async function confirmLogMaintenance() {
     if (!maintenanceTarget) return;
-    await new Promise((r) => setTimeout(r, 400));
+    const today = new Date().toISOString().slice(0, 10);
+    const supabase = createClient();
+    const { error } = await supabase.from("trucks").update({ last_maintenance: today }).eq("id", maintenanceTarget.id);
 
-    const today = TODAY.toISOString().slice(0, 10);
-    setTrucks((prev) =>
-      prev.map((t) => (t.id === maintenanceTarget.id ? { ...t, last_maintenance: today } : t))
-    );
-    showToast(`Maintenance logged for ${maintenanceTarget.truck_number}`);
+    if (!error) {
+      setTrucks((prev) =>
+        prev.map((t) => (t.id === maintenanceTarget.id ? { ...t, last_maintenance: today } : t))
+      );
+      showToast(`Maintenance logged for ${maintenanceTarget.truck_number}`);
+    }
     setMaintenanceTarget(null);
   }
 
   async function confirmChangeStatus() {
     if (!statusTarget) return;
-    await new Promise((r) => setTimeout(r, 400));
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("trucks")
+      .update({ status: statusTarget.newStatus })
+      .eq("id", statusTarget.truck.id);
 
-    setTrucks((prev) =>
-      prev.map((t) => (t.id === statusTarget.truck.id ? { ...t, status: statusTarget.newStatus } : t))
-    );
-    showToast(`${statusTarget.truck.truck_number} marked as ${statusTarget.newStatus}`);
+    if (!error) {
+      setTrucks((prev) =>
+        prev.map((t) => (t.id === statusTarget.truck.id ? { ...t, status: statusTarget.newStatus } : t))
+      );
+      showToast(`${statusTarget.truck.truck_number} marked as ${statusTarget.newStatus}`);
+    }
     setStatusTarget(null);
   }
 

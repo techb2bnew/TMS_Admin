@@ -3,37 +3,52 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { APP_TEXT } from "@/constants/text";
-import { NotificationsIcon, LoadsIcon, BillingIcon, FleetIcon, DriversIcon } from "@/components/icons";
-import { mockNotifications } from "@/lib/mock/notifications";
+import { NotificationsIcon } from "@/components/icons";
+import { createClient } from "@/lib/supabase/client";
 import { formatRelativeTime } from "@/lib/format";
-import type { NotificationItem, NotificationType } from "@/types";
 
 const T = APP_TEXT.notifications;
 const PREVIEW_COUNT = 6;
 
-const TYPE_ICON: Record<NotificationType, typeof LoadsIcon> = {
-  delay: LoadsIcon,
-  document: DriversIcon,
-  delivery: LoadsIcon,
-  maintenance: FleetIcon,
-  system: BillingIcon,
-};
-
-const LEVEL_STYLE: Record<string, string> = {
-  info: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  warning: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  success: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  critical: "bg-red-500/10 text-red-600 dark:text-red-400",
+type NotificationRow = {
+  id: string;
+  title: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
 };
 
 export default function NotificationBell() {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
-  const preview = notifications.slice(0, PREVIEW_COUNT);
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+
+    async function load() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from("notifications")
+        .select("id, title, message, is_read, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(PREVIEW_COUNT);
+      if (!cancelled) setNotifications(data ?? []);
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -45,8 +60,10 @@ export default function NotificationBell() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  function markRead(id: string) {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+  async function markRead(id: string) {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+    const supabase = createClient();
+    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
   }
 
   function viewAll() {
@@ -75,32 +92,29 @@ export default function NotificationBell() {
           </div>
 
           <div className="max-h-96 overflow-y-auto divide-y divide-blue-600/5 dark:divide-blue-400/5">
-            {preview.map((n) => {
-              const Icon = TYPE_ICON[n.type] ?? NotificationsIcon;
-              return (
-                <button
-                  key={n.id}
-                  onClick={() => markRead(n.id)}
-                  className={`w-full flex items-start gap-2.5 px-4 py-3 text-left transition-colors hover:bg-blue-50/60 ${
-                    !n.read ? "bg-blue-500/[0.03]" : ""
-                  }`}
-                >
-                  <span className={`flex items-center justify-center w-8 h-8 rounded-lg shrink-0 ${LEVEL_STYLE[n.level]}`}>
-                    <Icon className="w-4 h-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-medium truncate">{n.title}</span>
-                      {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />}
-                    </div>
-                    <p className="text-xs opacity-60 mt-0.5 line-clamp-1">{n.message}</p>
-                    <p className="text-[10px] opacity-40 mt-1">{formatRelativeTime(n.created_at)}</p>
+            {notifications.map((n) => (
+              <button
+                key={n.id}
+                onClick={() => markRead(n.id)}
+                className={`w-full flex items-start gap-2.5 px-4 py-3 text-left transition-colors hover:bg-blue-50/60 ${
+                  !n.is_read ? "bg-blue-500/[0.03]" : ""
+                }`}
+              >
+                <span className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                  <NotificationsIcon className="w-4 h-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium truncate">{n.title}</span>
+                    {!n.is_read && <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />}
                   </div>
-                </button>
-              );
-            })}
+                  <p className="text-xs opacity-60 mt-0.5 line-clamp-1">{n.message}</p>
+                  <p className="text-[10px] opacity-40 mt-1">{formatRelativeTime(n.created_at)}</p>
+                </div>
+              </button>
+            ))}
 
-            {preview.length === 0 && (
+            {notifications.length === 0 && (
               <div className="px-4 py-8 text-center text-xs opacity-50">{T.emptyState}</div>
             )}
           </div>

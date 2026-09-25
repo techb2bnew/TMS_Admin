@@ -1,22 +1,35 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { APP_TEXT } from "@/constants/text";
 import { SearchIcon, LoadsIcon, DriversIcon, FleetIcon } from "@/components/icons";
 import StatusBadge from "@/components/ui/StatusBadge";
-import { mockLoads } from "@/lib/mock/loads";
-import { mockDrivers } from "@/lib/mock/drivers";
-import { mockTrucks } from "@/lib/mock/trucks";
+import { createClient } from "@/lib/supabase/client";
+import type { LoadStatus, DriverStatus, TruckStatus } from "@/types";
 
 const T = APP_TEXT.search;
 const MAX_PER_SECTION = 4;
+
+type LoadResult = {
+  id: string;
+  load_number: string;
+  customer_name: string;
+  pickup_location: string;
+  drop_location: string;
+  status: LoadStatus;
+};
+type DriverResult = { id: string; full_name: string; phone: string; status: DriverStatus };
+type TruckResult = { id: string; truck_number: string; status: TruckStatus };
+
+const EMPTY_RESULTS = { loads: [] as LoadResult[], drivers: [] as DriverResult[], trucks: [] as TruckResult[] };
 
 export default function GlobalSearch() {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [results, setResults] = useState(EMPTY_RESULTS);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -28,30 +41,50 @@ export default function GlobalSearch() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return { loads: [], drivers: [], trucks: [] };
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      // Nothing to reset: the dropdown is hidden whenever the query is
+      // empty, so stale results here are simply never rendered.
+      return;
+    }
 
-    return {
-      loads: mockLoads
-        .filter(
-          (l) =>
-            l.id.toLowerCase().includes(q) ||
-            l.customer_name.toLowerCase().includes(q) ||
-            l.pickup_location.toLowerCase().includes(q) ||
-            l.drop_location.toLowerCase().includes(q)
-        )
-        .slice(0, MAX_PER_SECTION),
-      drivers: mockDrivers
-        .filter((d) => d.full_name.toLowerCase().includes(q) || d.phone.includes(q))
-        .slice(0, MAX_PER_SECTION),
-      trucks: mockTrucks
-        .filter(
-          (t) =>
-            t.truck_number.toLowerCase().includes(q) ||
-            (t.assigned_driver ?? "").toLowerCase().includes(q)
-        )
-        .slice(0, MAX_PER_SECTION),
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const supabase = createClient();
+      const like = `%${q}%`;
+
+      const [loadsRes, driversRes, trucksRes] = await Promise.all([
+        supabase
+          .from("loads")
+          .select("id, load_number, customer_name, pickup_location, drop_location, status")
+          .or(
+            `load_number.ilike.${like},customer_name.ilike.${like},pickup_location.ilike.${like},drop_location.ilike.${like}`
+          )
+          .limit(MAX_PER_SECTION),
+        supabase
+          .from("profiles")
+          .select("id, full_name, phone, drivers(status)")
+          .eq("role", "driver")
+          .or(`full_name.ilike.${like},phone.ilike.${like}`)
+          .limit(MAX_PER_SECTION),
+        supabase.from("trucks").select("id, truck_number, status").ilike("truck_number", like).limit(MAX_PER_SECTION),
+      ]);
+
+      if (cancelled) return;
+
+      setResults({
+        loads: (loadsRes.data ?? []) as LoadResult[],
+        drivers: ((driversRes.data ?? []) as unknown as { id: string; full_name: string; phone: string; drivers: { status: DriverStatus } | null }[]).map(
+          (d) => ({ id: d.id, full_name: d.full_name, phone: d.phone, status: d.drivers?.status ?? "active" })
+        ),
+        trucks: (trucksRes.data ?? []) as TruckResult[],
+      });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
     };
   }, [query]);
 
@@ -93,12 +126,12 @@ export default function GlobalSearch() {
               {results.loads.map((load) => (
                 <button
                   key={load.id}
-                  onClick={() => goTo(`/loads?q=${encodeURIComponent(load.id)}`)}
+                  onClick={() => goTo(`/loads?q=${encodeURIComponent(load.load_number)}`)}
                   className="w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-blue-50 transition-colors"
                 >
                   <LoadsIcon className="w-4 h-4 opacity-50 shrink-0" />
                   <span className="flex-1 min-w-0">
-                    <span className="text-sm font-medium">{load.id}</span>
+                    <span className="text-sm font-medium">{load.load_number}</span>
                     <span className="text-xs opacity-50 ml-2">
                       {load.customer_name} · {load.pickup_location} → {load.drop_location}
                     </span>
@@ -145,9 +178,6 @@ export default function GlobalSearch() {
                   <FleetIcon className="w-4 h-4 opacity-50 shrink-0" />
                   <span className="flex-1 min-w-0">
                     <span className="text-sm font-medium">{truck.truck_number}</span>
-                    <span className="text-xs opacity-50 ml-2">
-                      {truck.assigned_driver ?? "Unassigned"}
-                    </span>
                   </span>
                   <StatusBadge status={truck.status} />
                 </button>

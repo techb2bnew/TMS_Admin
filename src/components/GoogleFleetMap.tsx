@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import { GoogleMap, MarkerF, InfoWindowF, useJsApiLoader } from "@react-google-maps/api";
-import type { Driver } from "@/types";
 
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
-// Roughly centers the map over India, where all the mock driver locations sit.
+// Roughly centers the map over India, where seeded driver locations sit.
 const DEFAULT_CENTER = { lat: 23.5, lng: 80 };
 
 const MAP_STYLE = [
@@ -19,8 +18,15 @@ const MAP_STYLE = [
   { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#3a3a6e" }] },
 ];
 
+export type FleetMapDriver = {
+  id: string;
+  full_name: string;
+  truck_number: string | null;
+  location: { lat: number; lng: number; label: string };
+};
+
 type GoogleFleetMapProps = {
-  drivers: Driver[];
+  drivers: FleetMapDriver[];
   height?: string;
 };
 

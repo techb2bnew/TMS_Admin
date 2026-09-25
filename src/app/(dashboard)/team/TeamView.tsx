@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { APP_TEXT } from "@/constants/text";
 import PageHeader from "@/components/ui/PageHeader";
 import Toast from "@/components/ui/Toast";
 import InviteTeamMemberForm from "@/components/forms/InviteTeamMemberForm";
 import { PlusIcon } from "@/components/icons";
-import { mockTeamUsers } from "@/lib/mock/teamUsers";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/lib/useToast";
-import type { TeamStatus, TeamUser } from "@/types";
+import type { TeamRole, TeamStatus, TeamUser } from "@/types";
 
 const T = APP_TEXT.team;
 
@@ -17,10 +17,39 @@ const STATUS_STYLE: Record<TeamStatus, string> = {
   Invited: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25",
 };
 
+const DB_ROLE_TO_TEAM_ROLE: Record<string, TeamRole> = {
+  admin: "Admin",
+  dispatcher: "Dispatcher",
+  accountant: "Accountant",
+};
+
 function TeamView() {
-  const [members, setMembers] = useState<TeamUser[]>(mockTeamUsers);
+  const [members, setMembers] = useState<TeamUser[]>([]);
   const [showInviteForm, setShowInviteForm] = useState(false);
   const { message, showToast } = useToast();
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, role, created_at")
+        .in("role", ["admin", "dispatcher", "accountant"])
+        .order("created_at", { ascending: false });
+
+      setMembers(
+        (data ?? []).map((p) => ({
+          id: p.id,
+          name: p.full_name,
+          email: p.email ?? "",
+          role: DB_ROLE_TO_TEAM_ROLE[p.role] ?? "Dispatcher",
+          status: "Active",
+          addedAt: p.created_at,
+        }))
+      );
+    }
+    load();
+  }, []);
 
   function handleInvite(member: TeamUser) {
     setMembers((prev) => [member, ...prev]);

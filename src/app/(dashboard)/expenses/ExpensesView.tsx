@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { APP_TEXT } from "@/constants/text";
 import PageHeader from "@/components/ui/PageHeader";
@@ -8,7 +8,7 @@ import StatCard from "@/components/ui/StatCard";
 import Toast from "@/components/ui/Toast";
 import AddExpenseForm from "@/components/forms/AddExpenseForm";
 import { SearchIcon, PlusIcon, ExpensesIcon } from "@/components/icons";
-import { mockExpenses } from "@/lib/mock/expenses";
+import { createClient } from "@/lib/supabase/client";
 import { formatDate, formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/useToast";
 import type { Expense, ExpenseCategory } from "@/types";
@@ -26,11 +26,34 @@ const FILTERS: { key: ExpenseCategory | "all"; label: string }[] = [
 
 function ExpensesView() {
   const searchParams = useSearchParams();
-  const [expenses, setExpenses] = useState<Expense[]>(mockExpenses);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [filter, setFilter] = useState<ExpenseCategory | "all">("all");
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [showAddForm, setShowAddForm] = useState(false);
   const { message, showToast } = useToast();
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("expenses")
+        .select("id, category, amount, date, notes, trucks(truck_number)")
+        .order("date", { ascending: false });
+
+      setExpenses(
+        (data ?? []).map((e) => ({
+          id: e.id,
+          category: e.category as ExpenseCategory,
+          amount: e.amount,
+          truckNumber:
+            (e as unknown as { trucks: { truck_number: string } | null }).trucks?.truck_number ?? "—",
+          date: e.date,
+          notes: e.notes ?? "",
+        }))
+      );
+    }
+    load();
+  }, []);
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((expense) => {

@@ -10,6 +10,7 @@ export type DriverStatus = "active" | "inactive";
 
 export type Load = {
   id: string;
+  load_number: string;
   customer_name: string;
   pickup_location: string;
   drop_location: string;
@@ -29,7 +30,7 @@ export type Driver = {
   deliveries_count: number;
   joined_at: string;
   truck_number: string | null;
-  location: { lat: number; lng: number; label: string };
+  location: { lat: number; lng: number; label: string } | null;
 };
 
 export type TruckStatus = "active" | "maintenance" | "inactive";
@@ -61,19 +62,6 @@ export type Settlement = {
   driver_name: string;
   amount: number;
   status: InvoiceStatus;
-  created_at: string;
-};
-
-export type NotificationType = "delay" | "document" | "delivery" | "maintenance" | "system";
-export type NotificationLevel = "info" | "warning" | "success" | "critical";
-
-export type NotificationItem = {
-  id: string;
-  title: string;
-  message: string;
-  type: NotificationType;
-  level: NotificationLevel;
-  read: boolean;
   created_at: string;
 };
 

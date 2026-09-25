@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { APP_TEXT } from "@/constants/text";
 import PageHeader from "@/components/ui/PageHeader";
@@ -9,10 +9,10 @@ import Toast from "@/components/ui/Toast";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import AddDriverForm from "@/components/forms/AddDriverForm";
 import { SearchIcon, PlusIcon, FleetIcon, ChevronDownIcon } from "@/components/icons";
-import { mockDrivers } from "@/lib/mock/drivers";
+import { createClient } from "@/lib/supabase/client";
 import { formatDateLong } from "@/lib/format";
 import { useToast } from "@/lib/useToast";
-import type { Driver, DriverStatus } from "@/types";
+import type { Driver, DriverStatus, LoadStatus } from "@/types";
 
 const T = APP_TEXT.drivers;
 
@@ -21,6 +21,8 @@ const FILTERS: { key: DriverStatus | "all"; label: string }[] = [
   { key: "active", label: T.filters.active },
   { key: "inactive", label: T.filters.inactive },
 ];
+
+const ACTIVE_LOAD_STATUSES: LoadStatus[] = ["assigned", "picked_up", "in_transit"];
 
 const AVATAR_COLORS = [
   "bg-blue-500/15 text-blue-600 dark:text-blue-400",
@@ -41,7 +43,7 @@ function getInitials(name: string) {
 
 function DriversView() {
   const searchParams = useSearchParams();
-  const [drivers, setDrivers] = useState<Driver[]>(mockDrivers);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [filter, setFilter] = useState<DriverStatus | "all">("all");
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [showAddForm, setShowAddForm] = useState(false);
@@ -49,6 +51,49 @@ function DriversView() {
     null
   );
   const { message, showToast } = useToast();
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient();
+      const [{ data: driversData }, { data: loadsData }, { data: trucksData }] = await Promise.all([
+        supabase.from("drivers").select("id, status, license_number, created_at, profiles(full_name, phone)"),
+        supabase.from("loads").select("assigned_driver_id, assigned_truck_id, status"),
+        supabase.from("trucks").select("id, truck_number"),
+      ]);
+
+      const truckNumberById = new Map((trucksData ?? []).map((t) => [t.id, t.truck_number]));
+      const loads = loadsData ?? [];
+      const activeTruckByDriver = new Map(
+        loads
+          .filter((l) => l.assigned_driver_id && l.assigned_truck_id && ACTIVE_LOAD_STATUSES.includes(l.status))
+          .map((l) => [l.assigned_driver_id as string, truckNumberById.get(l.assigned_truck_id as string) ?? null])
+      );
+      const deliveriesByDriver = new Map<string, number>();
+      for (const l of loads) {
+        if (l.status === "delivered" && l.assigned_driver_id) {
+          deliveriesByDriver.set(l.assigned_driver_id, (deliveriesByDriver.get(l.assigned_driver_id) ?? 0) + 1);
+        }
+      }
+
+      const mapped: Driver[] = (driversData ?? []).map((d) => {
+        const profile = (d as unknown as { profiles: { full_name: string; phone: string } | null }).profiles;
+        return {
+          id: d.id,
+          full_name: profile?.full_name ?? "Unknown",
+          phone: profile?.phone ?? "",
+          license_number: d.license_number ?? "",
+          status: d.status as DriverStatus,
+          deliveries_count: deliveriesByDriver.get(d.id) ?? 0,
+          joined_at: (d as unknown as { created_at: string }).created_at,
+          truck_number: activeTruckByDriver.get(d.id) ?? null,
+          location: null,
+        };
+      });
+
+      setDrivers(mapped);
+    }
+    load();
+  }, []);
 
   const filteredDrivers = useMemo(() => {
     return drivers.filter((driver) => {
@@ -62,17 +107,23 @@ function DriversView() {
 
   function handleAddDriver(driver: Driver) {
     setDrivers((prev) => [driver, ...prev]);
-    showToast(`${driver.full_name} added — login credentials sent`);
+    showToast(`${driver.full_name} added`);
   }
 
   async function confirmChangeStatus() {
     if (!statusTarget) return;
-    await new Promise((r) => setTimeout(r, 400));
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("drivers")
+      .update({ status: statusTarget.newStatus })
+      .eq("id", statusTarget.driver.id);
 
-    setDrivers((prev) =>
-      prev.map((d) => (d.id === statusTarget.driver.id ? { ...d, status: statusTarget.newStatus } : d))
-    );
-    showToast(`${statusTarget.driver.full_name} marked as ${statusTarget.newStatus}`);
+    if (!error) {
+      setDrivers((prev) =>
+        prev.map((d) => (d.id === statusTarget.driver.id ? { ...d, status: statusTarget.newStatus } : d))
+      );
+      showToast(`${statusTarget.driver.full_name} marked as ${statusTarget.newStatus}`);
+    }
     setStatusTarget(null);
   }
 

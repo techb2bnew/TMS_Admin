@@ -3,11 +3,13 @@
 import { useState, type FormEvent } from "react";
 import Modal from "@/components/ui/Modal";
 import { APP_TEXT } from "@/constants/text";
+import { isValidEmail } from "@/lib/validation";
+import { createDriverAction } from "@/lib/actions/drivers";
 import type { Driver } from "@/types";
 
 const C = APP_TEXT.common;
 
-type Errors = Partial<Record<"full_name" | "phone" | "license_number" | "password", string>>;
+type Errors = Partial<Record<"full_name" | "phone" | "email" | "license_number" | "password", string>>;
 
 type AddDriverFormProps = {
   open: boolean;
@@ -24,19 +26,21 @@ function inputClass(hasError: boolean) {
 export default function AddDriverForm({ open, onClose, onAdd }: AddDriverFormProps) {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [licenseNumber, setLicenseNumber] = useState("");
-  const [truckNumber, setTruckNumber] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<Errors>({});
+  const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   function reset() {
     setFullName("");
     setPhone("");
+    setEmail("");
     setLicenseNumber("");
-    setTruckNumber("");
     setPassword("");
     setErrors({});
+    setFormError("");
   }
 
   function handleClose() {
@@ -49,6 +53,8 @@ export default function AddDriverForm({ open, onClose, onAdd }: AddDriverFormPro
     if (!fullName.trim()) next.full_name = C.required;
     if (!phone.trim()) next.phone = C.required;
     else if (phone.replace(/\D/g, "").length < 10) next.phone = "Enter a valid phone number";
+    if (!email.trim()) next.email = C.required;
+    else if (!isValidEmail(email)) next.email = "Enter a valid email address";
     if (!licenseNumber.trim()) next.license_number = C.required;
     if (!password.trim()) next.password = C.required;
     else if (password.length < 6) next.password = "Minimum 6 characters";
@@ -58,25 +64,35 @@ export default function AddDriverForm({ open, onClose, onAdd }: AddDriverFormPro
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setFormError("");
     if (!validate()) return;
 
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 400));
 
-    const driver: Driver = {
-      id: `d${Date.now()}`,
+    const result = await createDriverAction({
       full_name: fullName.trim(),
       phone: phone.trim(),
+      email: email.trim(),
       license_number: licenseNumber.trim(),
-      status: "active",
+      password,
+    });
+
+    setSubmitting(false);
+
+    if (!result.ok) {
+      setFormError(result.error);
+      return;
+    }
+
+    const driver: Driver = {
+      ...result.driver,
       deliveries_count: 0,
-      joined_at: new Date().toISOString().slice(0, 10),
-      truck_number: truckNumber.trim() || null,
-      location: { lat: 28.61, lng: 77.23, label: "Delhi" },
+      joined_at: result.driver.created_at.slice(0, 10),
+      truck_number: null,
+      location: null,
     };
 
     onAdd(driver);
-    setSubmitting(false);
     reset();
     onClose();
   }
@@ -125,30 +141,33 @@ export default function AddDriverForm({ open, onClose, onAdd }: AddDriverFormPro
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="+91 98765 43210"
+            maxLength={16}
             className={inputClass(Boolean(errors.phone))}
           />
           {errors.phone && <p className="mt-1.5 text-xs text-red-500">{errors.phone}</p>}
         </div>
 
         <div>
+          <label className="block text-sm font-medium mb-1.5">Email</label>
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value.toLowerCase())}
+            placeholder="driver@tms.com"
+            autoCapitalize="none"
+            className={inputClass(Boolean(errors.email))}
+          />
+          {errors.email && <p className="mt-1.5 text-xs text-red-500">{errors.email}</p>}
+        </div>
+
+        <div>
           <label className="block text-sm font-medium mb-1.5">License number</label>
           <input
             value={licenseNumber}
-            onChange={(e) => setLicenseNumber(e.target.value)}
+            onChange={(e) => setLicenseNumber(e.target.value.toUpperCase())}
             placeholder="DL-04-2019-0089341"
             className={inputClass(Boolean(errors.license_number))}
           />
           {errors.license_number && <p className="mt-1.5 text-xs text-red-500">{errors.license_number}</p>}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1.5">Truck number (optional)</label>
-          <input
-            value={truckNumber}
-            onChange={(e) => setTruckNumber(e.target.value)}
-            placeholder="e.g. PB-11-TA-4521"
-            className={inputClass(false)}
-          />
         </div>
 
         <div>
@@ -161,6 +180,12 @@ export default function AddDriverForm({ open, onClose, onAdd }: AddDriverFormPro
           />
           {errors.password && <p className="mt-1.5 text-xs text-red-500">{errors.password}</p>}
         </div>
+
+        {formError && (
+          <div className="rounded-lg bg-red-50 border border-red-200 px-3.5 py-2.5 text-sm text-red-600">
+            {formError}
+          </div>
+        )}
       </form>
     </Modal>
   );

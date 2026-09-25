@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Modal from "@/components/ui/Modal";
 import AddCustomerForm from "@/components/forms/AddCustomerForm";
 import { APP_TEXT } from "@/constants/text";
-import { mockLoadTemplates } from "@/lib/mock/loadTemplates";
-import { mockCustomers } from "@/lib/mock/customers";
+import { createClient } from "@/lib/supabase/client";
 import type { Customer, Load } from "@/types";
 
 const C = APP_TEXT.common;
@@ -15,6 +14,15 @@ const CT = APP_TEXT.loads.customerSelect;
 const ADD_NEW_CUSTOMER = "__add_new__";
 
 type Errors = Partial<Record<"customer_name" | "pickup_location" | "drop_location" | "weight_kg" | "rate", string>>;
+
+type LoadTemplateRow = {
+  id: string;
+  name: string;
+  customer_id: string | null;
+  pickup_location: string;
+  drop_location: string;
+  default_rate: number | null;
+};
 
 type AddLoadFormProps = {
   open: boolean;
@@ -29,8 +37,9 @@ function inputClass(hasError: boolean) {
 }
 
 export default function AddLoadForm({ open, onClose, onAdd }: AddLoadFormProps) {
+  const [templates, setTemplates] = useState<LoadTemplateRow[]>([]);
   const [templateId, setTemplateId] = useState("");
-  const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerId, setCustomerId] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [pickup, setPickup] = useState("");
@@ -38,8 +47,34 @@ export default function AddLoadForm({ open, onClose, onAdd }: AddLoadFormProps) 
   const [weight, setWeight] = useState("");
   const [rate, setRate] = useState("");
   const [errors, setErrors] = useState<Errors>({});
+  const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    async function load() {
+      const supabase = createClient();
+      const [{ data: customersData }, { data: templatesData }] = await Promise.all([
+        supabase.from("customers").select("id, name, contact_person, phone, email, billing_address, payment_terms, created_at"),
+        supabase.from("load_templates").select("id, name, customer_id, pickup_location, drop_location, default_rate"),
+      ]);
+      setCustomers(
+        (customersData ?? []).map((c) => ({
+          id: c.id,
+          name: c.name,
+          contactPerson: c.contact_person ?? "",
+          phone: c.phone ?? "",
+          email: c.email ?? "",
+          billingAddress: c.billing_address ?? "",
+          paymentTerms: c.payment_terms,
+          createdAt: c.created_at,
+        }))
+      );
+      setTemplates(templatesData ?? []);
+    }
+    load();
+  }, [open]);
 
   function handleCustomerChange(id: string) {
     if (id === ADD_NEW_CUSTOMER) {
@@ -59,12 +94,14 @@ export default function AddLoadForm({ open, onClose, onAdd }: AddLoadFormProps) 
 
   function handleTemplateChange(id: string) {
     setTemplateId(id);
-    const template = mockLoadTemplates.find((t) => t.id === id);
+    const template = templates.find((t) => t.id === id);
     if (!template) return;
-    setCustomerName(template.customerName);
-    setPickup(template.pickupLocation);
-    setDrop(template.dropLocation);
-    setRate(String(template.defaultRate));
+    if (template.customer_id) {
+      handleCustomerChange(template.customer_id);
+    }
+    setPickup(template.pickup_location);
+    setDrop(template.drop_location);
+    setRate(template.default_rate ? String(template.default_rate) : "");
   }
 
   function reset() {
@@ -76,6 +113,7 @@ export default function AddLoadForm({ open, onClose, onAdd }: AddLoadFormProps) 
     setWeight("");
     setRate("");
     setErrors({});
+    setFormError("");
   }
 
   function handleClose() {
@@ -96,25 +134,39 @@ export default function AddLoadForm({ open, onClose, onAdd }: AddLoadFormProps) 
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setFormError("");
     if (!validate()) return;
 
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 400));
 
-    const load: Load = {
-      id: `LD-${Math.floor(1000 + Math.random() * 9000)}`,
-      customer_name: customerName.trim(),
-      pickup_location: pickup.trim(),
-      drop_location: drop.trim(),
-      weight_kg: Number(weight),
-      rate: Number(rate),
-      status: "pending",
-      assigned_driver: null,
-      created_at: new Date().toISOString(),
-    };
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    onAdd(load);
+    const { data, error } = await supabase
+      .from("loads")
+      .insert({
+        customer_name: customerName.trim(),
+        customer_id: customerId || null,
+        pickup_location: pickup.trim(),
+        drop_location: drop.trim(),
+        weight_kg: Number(weight),
+        rate: Number(rate),
+        status: "pending",
+        created_by: user?.id ?? null,
+      })
+      .select("id, load_number, customer_name, pickup_location, drop_location, weight_kg, rate, status, created_at")
+      .single();
+
     setSubmitting(false);
+
+    if (error || !data) {
+      setFormError(error?.message ?? "Could not create load");
+      return;
+    }
+
+    onAdd({ ...data, assigned_driver: null });
     reset();
     onClose();
   }
@@ -155,7 +207,7 @@ export default function AddLoadForm({ open, onClose, onAdd }: AddLoadFormProps) 
             className="w-full rounded-lg border px-3.5 py-2.5 text-sm bg-transparent outline-none transition-colors focus:ring-2 focus:ring-blue-600/20 border-blue-600/10 dark:border-blue-400/10 focus:border-blue-600"
           >
             <option value="">{TT.noneOption}</option>
-            {mockLoadTemplates.map((template) => (
+            {templates.map((template) => (
               <option key={template.id} value={template.id}>
                 {template.name}
               </option>
@@ -228,6 +280,12 @@ export default function AddLoadForm({ open, onClose, onAdd }: AddLoadFormProps) 
             {errors.rate && <p className="mt-1.5 text-xs text-red-500">{errors.rate}</p>}
           </div>
         </div>
+
+        {formError && (
+          <div className="rounded-lg bg-red-50 border border-red-200 px-3.5 py-2.5 text-sm text-red-600">
+            {formError}
+          </div>
+        )}
       </form>
     </Modal>
       <AddCustomerForm
