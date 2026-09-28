@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendDriverWelcomeEmail } from "@/lib/email";
 
 export type CreateDriverInput = {
   full_name: string;
@@ -60,6 +61,8 @@ export async function createDriverAction(input: CreateDriverInput): Promise<Crea
     await supabase.auth.admin.deleteUser(userId);
     return { ok: false, error: driverError.message };
   }
+
+  await sendDriverWelcomeEmail({ to: input.email, fullName: input.full_name, password: input.password });
 
   return {
     ok: true,

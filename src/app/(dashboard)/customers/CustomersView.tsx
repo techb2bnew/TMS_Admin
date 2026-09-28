@@ -7,7 +7,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import StatCard from "@/components/ui/StatCard";
 import Toast from "@/components/ui/Toast";
 import AddCustomerForm from "@/components/forms/AddCustomerForm";
-import { SearchIcon, PlusIcon, CustomersIcon, BillingIcon } from "@/components/icons";
+import { SearchIcon, PlusIcon, CustomersIcon, BillingIcon, PencilIcon } from "@/components/icons";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/lib/useToast";
 import type { Customer } from "@/types";
@@ -43,6 +43,7 @@ function CustomersView() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const { message, showToast } = useToast();
 
   useEffect(() => {
@@ -68,9 +69,14 @@ function CustomersView() {
     [customers]
   );
 
-  function handleAddCustomer(customer: Customer) {
-    setCustomers((prev) => [customer, ...prev]);
-    showToast(`${customer.name} added`);
+  function handleSavedCustomer(customer: Customer) {
+    setCustomers((prev) => {
+      const exists = prev.some((c) => c.id === customer.id);
+      if (exists) return prev.map((c) => (c.id === customer.id ? customer : c));
+      return [customer, ...prev];
+    });
+    showToast(editingCustomer ? `${customer.name} ${T.updatedToast}` : `${customer.name} added`);
+    setEditingCustomer(null);
   }
 
   return (
@@ -80,7 +86,10 @@ function CustomersView() {
         subtitle={T.subtitle}
         action={
           <button
-            onClick={() => setShowAddForm(true)}
+            onClick={() => {
+              setEditingCustomer(null);
+              setShowAddForm(true);
+            }}
             className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white text-sm font-medium px-4 py-2.5 transition-all shadow-md shadow-blue-600/25 hover:shadow-lg hover:-translate-y-0.5"
           >
             <PlusIcon className="w-4 h-4" />
@@ -116,6 +125,7 @@ function CustomersView() {
                 <th className="font-medium px-5 py-3">{T.table.phone}</th>
                 <th className="font-medium px-5 py-3">{T.table.email}</th>
                 <th className="font-medium px-5 py-3">{T.table.paymentTerms}</th>
+                <th className="font-medium px-5 py-3 text-right">{T.table.actions}</th>
               </tr>
             </thead>
             <tbody>
@@ -129,12 +139,24 @@ function CustomersView() {
                   <td className="px-5 py-3.5 opacity-70 whitespace-nowrap">{customer.phone}</td>
                   <td className="px-5 py-3.5 opacity-70">{customer.email}</td>
                   <td className="px-5 py-3.5 opacity-70 whitespace-nowrap">{customer.paymentTerms}</td>
+                  <td className="px-5 py-3.5 text-right">
+                    <button
+                      onClick={() => {
+                        setEditingCustomer(customer);
+                        setShowAddForm(true);
+                      }}
+                      title={T.edit}
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-lg opacity-60 hover:opacity-100 hover:bg-slate-100 transition-colors"
+                    >
+                      <PencilIcon className="w-4 h-4" />
+                    </button>
+                  </td>
                 </tr>
               ))}
 
               {filteredCustomers.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-sm opacity-50">
+                  <td colSpan={6} className="px-5 py-10 text-center text-sm opacity-50">
                     {T.emptyState}
                   </td>
                 </tr>
@@ -144,7 +166,18 @@ function CustomersView() {
         </div>
       </div>
 
-      <AddCustomerForm open={showAddForm} onClose={() => setShowAddForm(false)} onAdd={handleAddCustomer} />
+      {showAddForm && (
+        <AddCustomerForm
+          key={editingCustomer?.id ?? "new"}
+          open
+          customer={editingCustomer}
+          onClose={() => {
+            setShowAddForm(false);
+            setEditingCustomer(null);
+          }}
+          onSaved={handleSavedCustomer}
+        />
+      )}
       <Toast message={message} />
     </div>
   );

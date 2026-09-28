@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { APP_TEXT } from "@/constants/text";
 import PageHeader from "@/components/ui/PageHeader";
@@ -19,6 +20,10 @@ import type { CheckCall, Load, LoadStatus } from "@/types";
 
 const T = APP_TEXT.loads;
 const A = APP_TEXT.loads.loadActions;
+const DT = APP_TEXT.dispatch;
+
+type DriverOption = { id: string; full_name: string };
+type TruckOption = { id: string; truck_number: string; capacity_kg: number };
 
 type LoadTab = "active" | "planning" | "readyForAccounting" | "all" | "cancelled";
 
@@ -32,7 +37,7 @@ const TABS: { key: LoadTab; label: string }[] = [
 
 const ACTIVE_STATUSES: LoadStatus[] = ["assigned", "picked_up", "in_transit"];
 
-type LoadRow = Load & { driverName: string | null; assigned_driver_id: string | null };
+type LoadRow = Load & { driverName: string | null; assigned_driver_id: string | null; assigned_truck_id: string | null };
 
 function matchesTab(load: LoadRow, tab: LoadTab) {
   switch (tab) {
@@ -63,18 +68,28 @@ export default function LoadsView() {
   const [logTarget, setLogTarget] = useState<LoadRow | null>(null);
   const [logCheckCalls, setLogCheckCalls] = useState<CheckCall[]>([]);
   const [invoicedLoadIds, setInvoicedLoadIds] = useState<Set<string>>(new Set());
+  const [drivers, setDrivers] = useState<DriverOption[]>([]);
+  const [trucks, setTrucks] = useState<TruckOption[]>([]);
+  const [selectedDriver, setSelectedDriver] = useState<Record<string, string>>({});
+  const [selectedTruck, setSelectedTruck] = useState<Record<string, string>>({});
+  const [assignTarget, setAssignTarget] = useState<LoadRow | null>(null);
   const { message, showToast } = useToast();
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     async function loadLoads() {
       const supabase = createClient();
-      const { data } = await supabase
-        .from("loads")
-        .select(
-          "id, load_number, customer_name, pickup_location, drop_location, weight_kg, rate, status, assigned_driver_id, created_at, drivers(profiles(full_name))"
-        )
-        .order("created_at", { ascending: false });
+      const [{ data }, { data: invoicesData }, { data: driversData }, { data: trucksData }] = await Promise.all([
+        supabase
+          .from("loads")
+          .select(
+            "id, load_number, customer_name, pickup_location, drop_location, weight_kg, rate, status, assigned_driver_id, assigned_truck_id, created_at, drivers(profiles(full_name))"
+          )
+          .order("created_at", { ascending: false }),
+        supabase.from("invoices").select("load_id"),
+        supabase.from("drivers").select("id, status, profiles(full_name)").eq("status", "active"),
+        supabase.from("trucks").select("id, truck_number, capacity_kg").eq("status", "active"),
+      ]);
 
       setLoads(
         (data ?? []).map((l) => {
@@ -84,6 +99,17 @@ export default function LoadsView() {
           return { ...l, assigned_driver: driverName, driverName };
         })
       );
+      // Sourced from the real `invoices` table (not just this session's own
+      // "Send to Accounting" clicks), so the button stays hidden for loads
+      // that were already invoiced before this page load.
+      setInvoicedLoadIds(new Set((invoicesData ?? []).map((i) => i.load_id)));
+      setDrivers(
+        (driversData ?? []).map((d) => ({
+          id: d.id,
+          full_name: (d as unknown as { profiles: { full_name: string } | null }).profiles?.full_name ?? "Unknown",
+        }))
+      );
+      setTrucks((trucksData ?? []) as TruckOption[]);
     }
 
     loadLoads();
@@ -113,6 +139,68 @@ export default function LoadsView() {
     };
   }, [openMenuId]);
 
+  const busyDriverIds = useMemo(
+    () =>
+      new Set(
+        loads.filter((l) => ACTIVE_STATUSES.includes(l.status) && l.assigned_driver_id).map((l) => l.assigned_driver_id as string)
+      ),
+    [loads]
+  );
+  const busyTruckIds = useMemo(
+    () =>
+      new Set(
+        loads.filter((l) => ACTIVE_STATUSES.includes(l.status) && l.assigned_truck_id).map((l) => l.assigned_truck_id as string)
+      ),
+    [loads]
+  );
+  const availableDrivers = useMemo(() => drivers.filter((d) => !busyDriverIds.has(d.id)), [drivers, busyDriverIds]);
+  const availableTrucks = useMemo(() => trucks.filter((t) => !busyTruckIds.has(t.id)), [trucks, busyTruckIds]);
+
+  function requestAssign(load: LoadRow) {
+    if (!selectedDriver[load.id] || !selectedTruck[load.id]) return;
+    setAssignTarget(load);
+  }
+
+  async function confirmAssignFromList() {
+    if (!assignTarget) return;
+    const driverId = selectedDriver[assignTarget.id];
+    const truckId = selectedTruck[assignTarget.id];
+    const supabase = createClient();
+
+    const { error } = await supabase
+      .from("loads")
+      .update({ status: "assigned", assigned_driver_id: driverId, assigned_truck_id: truckId })
+      .eq("id", assignTarget.id);
+
+    if (!error) {
+      const driverName = drivers.find((d) => d.id === driverId)?.full_name ?? null;
+      setLoads((prev) =>
+        prev.map((l) =>
+          l.id === assignTarget.id
+            ? { ...l, status: "assigned", assigned_driver_id: driverId, assigned_truck_id: truckId, driverName }
+            : l
+        )
+      );
+      const truck = trucks.find((t) => t.id === truckId);
+      if (truck) {
+        await supabase.from("notifications").insert({
+          user_id: driverId,
+          title: DT.assignmentNotificationTitle,
+          message: DT.assignmentNotificationMessage(
+            assignTarget.load_number,
+            assignTarget.pickup_location,
+            assignTarget.drop_location,
+            truck.truck_number
+          ),
+        });
+      }
+      showToast(`${driverName ?? "Driver"} assigned to ${assignTarget.load_number}`);
+    } else {
+      showToast(error.message);
+    }
+    setAssignTarget(null);
+  }
+
   const filteredLoads = useMemo(() => {
     return loads.filter((load) => {
       const matchesFilter = matchesTab(load, tab);
@@ -128,7 +216,7 @@ export default function LoadsView() {
   }, [loads, tab, query]);
 
   function handleAddLoad(load: Load) {
-    setLoads((prev) => [{ ...load, driverName: null, assigned_driver_id: null }, ...prev]);
+    setLoads((prev) => [{ ...load, driverName: null, assigned_driver_id: null, assigned_truck_id: null }, ...prev]);
     showToast(`Load ${load.load_number} created`);
   }
 
@@ -150,7 +238,7 @@ export default function LoadsView() {
 
     if (!error && data) {
       setLoads((prev) => [
-        { ...data, assigned_driver: null, driverName: null, assigned_driver_id: null },
+        { ...data, assigned_driver: null, driverName: null, assigned_driver_id: null, assigned_truck_id: null },
         ...prev,
       ]);
       showToast(A.copiedToast);
@@ -301,30 +389,84 @@ export default function LoadsView() {
                 key={load.id}
                 className="border-t border-blue-600/5 dark:border-blue-400/5 hover:bg-blue-50/60 transition-colors"
               >
-                <td className="px-5 py-3.5 font-medium">{load.load_number}</td>
+                <td className="px-5 py-3.5 font-medium">
+                  <Link href={`/loads/${load.id}`} className="text-blue-600 dark:text-blue-400 hover:underline">
+                    {load.load_number}
+                  </Link>
+                </td>
                 <td className="px-5 py-3.5 opacity-80">{load.customer_name}</td>
                 <td className="px-5 py-3.5 opacity-70 whitespace-nowrap">
                   {load.pickup_location} → {load.drop_location}
                 </td>
                 <td className="px-5 py-3.5 opacity-70">{load.weight_kg.toLocaleString("en-IN")} kg</td>
                 <td className="px-5 py-3.5 opacity-70">{formatCurrency(load.rate)}</td>
-                <td className="px-5 py-3.5 opacity-70">{load.driverName ?? "—"}</td>
+                <td className="px-5 py-3.5 opacity-70 min-w-[220px]">
+                  {load.status === "pending" ? (
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value={selectedDriver[load.id] ?? ""}
+                        onChange={(e) => setSelectedDriver((prev) => ({ ...prev, [load.id]: e.target.value }))}
+                        className="rounded-lg border border-blue-600/10 dark:border-blue-400/10 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-600 transition-colors max-w-[110px]"
+                      >
+                        <option value="">{DT.selectDriver}</option>
+                        {availableDrivers.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.full_name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={selectedTruck[load.id] ?? ""}
+                        onChange={(e) => setSelectedTruck((prev) => ({ ...prev, [load.id]: e.target.value }))}
+                        className="rounded-lg border border-blue-600/10 dark:border-blue-400/10 bg-transparent px-2 py-1.5 text-xs outline-none focus:border-blue-600 transition-colors max-w-[90px]"
+                      >
+                        <option value="">Truck</option>
+                        {availableTrucks
+                          .filter((t) => t.capacity_kg >= load.weight_kg)
+                          .map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.truck_number} ({t.capacity_kg.toLocaleString("en-IN")} kg)
+                            </option>
+                          ))}
+                      </select>
+                      <button
+                        onClick={() => requestAssign(load)}
+                        disabled={!selectedDriver[load.id] || !selectedTruck[load.id]}
+                        className="rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-2.5 py-1.5 transition-colors whitespace-nowrap"
+                      >
+                        {DT.assign}
+                      </button>
+                    </div>
+                  ) : (
+                    load.driverName ?? "—"
+                  )}
+                </td>
                 <td className="px-5 py-3.5">
                   <StatusBadge status={load.status} />
                 </td>
                 <td className="px-5 py-3.5 opacity-50 whitespace-nowrap">{formatDate(load.created_at)}</td>
                 <td className="px-5 py-3.5 text-right relative">
-                  <button
-                    onClick={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      setMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
-                      setOpenMenuId(openMenuId === load.id ? null : load.id);
-                    }}
-                    title={A.menuLabel}
-                    className="inline-flex items-center justify-center w-7 h-7 rounded-lg opacity-60 hover:opacity-100 hover:bg-slate-100 transition-colors"
-                  >
-                    <KebabIcon className="w-4 h-4" />
-                  </button>
+                  <div className="inline-flex items-center gap-2">
+                    {load.status === "delivered" && !invoicedLoadIds.has(load.id) && (
+                      <button
+                        onClick={() => handleSendToAccounting(load)}
+                        className="rounded-lg bg-blue-600/10 hover:bg-blue-600/20 text-blue-600 dark:text-blue-400 text-xs font-medium px-3 py-1.5 transition-colors whitespace-nowrap"
+                      >
+                        {A.sendToAccounting}
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+                        setOpenMenuId(openMenuId === load.id ? null : load.id);
+                      }}
+                      title={A.menuLabel}
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-lg opacity-60 hover:opacity-100 hover:bg-slate-100 transition-colors"
+                    >
+                      <KebabIcon className="w-4 h-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -365,14 +507,6 @@ export default function LoadsView() {
               >
                 {A.archiveLoad}
               </button>
-              {load.status === "delivered" && !invoicedLoadIds.has(load.id) && (
-                <button
-                  onClick={() => handleSendToAccounting(load)}
-                  className="w-full text-left px-3.5 py-2 text-xs text-blue-600 hover:bg-blue-50 transition-colors"
-                >
-                  {A.sendToAccounting}
-                </button>
-              )}
               <button
                 onClick={() => {
                   setOpenMenuId(null);
@@ -411,6 +545,28 @@ export default function LoadsView() {
         title={A.cancelConfirmTitle}
         message={A.cancelConfirmMessage}
         tone="danger"
+      />
+
+      <ConfirmDialog
+        open={Boolean(assignTarget)}
+        onClose={() => setAssignTarget(null)}
+        onConfirm={confirmAssignFromList}
+        title="Assign this load?"
+        confirmLabel={DT.assign}
+        message={
+          assignTarget ? (
+            <>
+              Assign{" "}
+              <span className="font-medium text-black dark:text-white">
+                {drivers.find((d) => d.id === selectedDriver[assignTarget.id])?.full_name}
+              </span>{" "}
+              ({trucks.find((t) => t.id === selectedTruck[assignTarget.id])?.truck_number}) to load{" "}
+              <span className="font-medium text-black dark:text-white">{assignTarget.load_number}</span>?
+            </>
+          ) : (
+            ""
+          )
+        }
       />
 
       <LogCheckCallForm

@@ -190,6 +190,15 @@ export function KebabIcon({ className }: IconProps) {
   );
 }
 
+export function PencilIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" strokeWidth="1.7">
+      <path d="M4 20l.9-4.2a2 2 0 0 1 .55-1L15.8 4.5a1.7 1.7 0 0 1 2.4 0l1.3 1.3a1.7 1.7 0 0 1 0 2.4L9.2 18.55a2 2 0 0 1-1 .55L4 20Z" stroke="currentColor" strokeLinejoin="round" />
+      <path d="M14 6.5l3.5 3.5" stroke="currentColor" />
+    </svg>
+  );
+}
+
 export function TruckMarkerIcon({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none">

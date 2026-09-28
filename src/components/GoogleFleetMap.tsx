@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { GoogleMap, MarkerF, InfoWindowF, useJsApiLoader } from "@react-google-maps/api";
+import { useEffect, useState } from "react";
+import { GoogleMap, MarkerF, PolylineF, InfoWindowF, useJsApiLoader } from "@react-google-maps/api";
 
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
@@ -18,6 +18,27 @@ const MAP_STYLE = [
   { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#3a3a6e" }] },
 ];
 
+// One distinct color per load — cycled by a stable hash of the load id, not
+// by list position, so a load's color doesn't shift as others come and go.
+const ROUTE_COLORS = [
+  "#3b82f6",
+  "#ef4444",
+  "#10b981",
+  "#f59e0b",
+  "#8b5cf6",
+  "#ec4899",
+  "#14b8a6",
+  "#f97316",
+  "#6366f1",
+  "#84cc16",
+];
+
+function colorForLoad(loadId: string) {
+  let hash = 0;
+  for (let i = 0; i < loadId.length; i++) hash = (hash * 31 + loadId.charCodeAt(i)) >>> 0;
+  return ROUTE_COLORS[hash % ROUTE_COLORS.length];
+}
+
 export type FleetMapDriver = {
   id: string;
   full_name: string;
@@ -25,17 +46,84 @@ export type FleetMapDriver = {
   location: { lat: number; lng: number; label: string };
 };
 
+export type LoadRoute = {
+  loadId: string;
+  loadNumber: string;
+  customerName: string;
+  pickupLocation: string;
+  dropLocation: string;
+  truckNumber: string | null;
+  driverName: string | null;
+  pickup: { lat: number; lng: number };
+  drop: { lat: number; lng: number };
+  waypoints: { lat: number; lng: number; label: string }[];
+};
+
 type GoogleFleetMapProps = {
   drivers: FleetMapDriver[];
+  routes?: LoadRoute[];
   height?: string;
 };
 
-export default function GoogleFleetMap({ drivers, height = "18rem" }: GoogleFleetMapProps) {
+// Fetches the real road-following path between a load's pickup and drop via
+// the Directions API (a straight line otherwise) and renders it. One
+// DirectionsService call per route — requires "Directions API" enabled on
+// the same Google Cloud project as NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.
+function RouteLine({
+  pickup,
+  drop,
+  waypoints = [],
+  color,
+  onClick,
+}: {
+  pickup: { lat: number; lng: number };
+  drop: { lat: number; lng: number };
+  waypoints?: { lat: number; lng: number }[];
+  color: string;
+  onClick: () => void;
+}) {
+  const [path, setPath] = useState<google.maps.LatLngLiteral[] | null>(null);
+  const waypointsKey = waypoints.map((w) => `${w.lat},${w.lng}`).join("|");
+
+  useEffect(() => {
+    let cancelled = false;
+    const directionsService = new google.maps.DirectionsService();
+    directionsService.route(
+      {
+        origin: pickup,
+        destination: drop,
+        waypoints: waypoints.map((w) => ({ location: w, stopover: true })),
+        travelMode: google.maps.TravelMode.DRIVING,
+      },
+      (result, status) => {
+        if (cancelled) return;
+        if (status === google.maps.DirectionsStatus.OK && result?.routes[0]) {
+          setPath(result.routes[0].overview_path.map((p) => ({ lat: p.lat(), lng: p.lng() })));
+        }
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickup.lat, pickup.lng, drop.lat, drop.lng, waypointsKey]);
+
+  return (
+    <PolylineF
+      path={path ?? [pickup, drop]}
+      options={{ strokeColor: color, strokeOpacity: 0.9, strokeWeight: 3 }}
+      onClick={onClick}
+    />
+  );
+}
+
+export default function GoogleFleetMap({ drivers, routes = [], height = "18rem" }: GoogleFleetMapProps) {
   const { isLoaded, loadError } = useJsApiLoader({
     id: "tms-google-map-script",
     googleMapsApiKey: API_KEY,
   });
   const [activeDriverId, setActiveDriverId] = useState<string | null>(null);
+  const [activeRouteId, setActiveRouteId] = useState<string | null>(null);
 
   if (!API_KEY) {
     return (
@@ -69,6 +157,14 @@ export default function GoogleFleetMap({ drivers, height = "18rem" }: GoogleFlee
     );
   }
 
+  const activeRoute = routes.find((r) => r.loadId === activeRouteId);
+  const activeRouteMidpoint = activeRoute
+    ? {
+        lat: (activeRoute.pickup.lat + activeRoute.drop.lat) / 2,
+        lng: (activeRoute.pickup.lng + activeRoute.drop.lng) / 2,
+      }
+    : null;
+
   return (
     <GoogleMap
       mapContainerStyle={{ width: "100%", height }}
@@ -86,6 +182,88 @@ export default function GoogleFleetMap({ drivers, height = "18rem" }: GoogleFlee
         },
       }}
     >
+      {routes.map((r) => (
+        <RouteLine
+          key={r.loadId}
+          pickup={r.pickup}
+          drop={r.drop}
+          waypoints={r.waypoints}
+          color={colorForLoad(r.loadId)}
+          onClick={() => setActiveRouteId(r.loadId)}
+        />
+      ))}
+
+      {routes.map((r) => {
+        const color = colorForLoad(r.loadId);
+        return (
+          <MarkerF
+            key={`${r.loadId}-pickup`}
+            position={r.pickup}
+            onClick={() => setActiveRouteId(r.loadId)}
+            icon={{
+              path: google.maps.SymbolPath.CIRCLE,
+              fillColor: color,
+              fillOpacity: 1,
+              strokeColor: "#ffffff",
+              strokeWeight: 1.5,
+              scale: 6,
+            }}
+          />
+        );
+      })}
+      {routes.map((r) => {
+        const color = colorForLoad(r.loadId);
+        return (
+          <MarkerF
+            key={`${r.loadId}-drop`}
+            position={r.drop}
+            onClick={() => setActiveRouteId(r.loadId)}
+            icon={{
+              path: "M -5,-5 5,-5 5,5 -5,5 Z",
+              fillColor: color,
+              fillOpacity: 1,
+              strokeColor: "#ffffff",
+              strokeWeight: 1.5,
+              scale: 1,
+            }}
+          />
+        );
+      })}
+
+      {routes.map((r) => {
+        const color = colorForLoad(r.loadId);
+        return r.waypoints.map((w, i) => (
+          <MarkerF
+            key={`${r.loadId}-stop-${i}`}
+            position={{ lat: w.lat, lng: w.lng }}
+            title={w.label}
+            onClick={() => setActiveRouteId(r.loadId)}
+            icon={{
+              path: google.maps.SymbolPath.CIRCLE,
+              fillColor: "#ffffff",
+              fillOpacity: 1,
+              strokeColor: color,
+              strokeWeight: 2,
+              scale: 5,
+            }}
+          />
+        ));
+      })}
+
+      {activeRoute && activeRouteMidpoint && (
+        <InfoWindowF position={activeRouteMidpoint} onCloseClick={() => setActiveRouteId(null)}>
+          <div className="text-xs text-slate-900 space-y-0.5">
+            <div className="font-semibold">{activeRoute.loadNumber}</div>
+            <div>{activeRoute.customerName}</div>
+            <div>
+              {activeRoute.pickupLocation} → {activeRoute.dropLocation}
+            </div>
+            <div>Driver: {activeRoute.driverName ?? "—"}</div>
+            <div>Truck: {activeRoute.truckNumber ?? "—"}</div>
+          </div>
+        </InfoWindowF>
+      )}
+
       {drivers.map((driver) => (
         <MarkerF
           key={driver.id}

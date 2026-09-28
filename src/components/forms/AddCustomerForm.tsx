@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Customer } from "@/types";
 
 const C = APP_TEXT.common;
+const T = APP_TEXT.customers;
 
 const PAYMENT_TERMS = ["Net 15", "Net 30", "Due on receipt"];
 
@@ -16,7 +17,9 @@ type Errors = Partial<Record<"name" | "contactPerson" | "phone" | "email", strin
 type AddCustomerFormProps = {
   open: boolean;
   onClose: () => void;
-  onAdd: (customer: Customer) => void;
+  onSaved: (customer: Customer) => void;
+  // Present when editing an existing customer instead of adding a new one.
+  customer?: Customer | null;
 };
 
 function inputClass(hasError: boolean) {
@@ -25,30 +28,22 @@ function inputClass(hasError: boolean) {
   }`;
 }
 
-export default function AddCustomerForm({ open, onClose, onAdd }: AddCustomerFormProps) {
-  const [name, setName] = useState("");
-  const [contactPerson, setContactPerson] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [billingAddress, setBillingAddress] = useState("");
-  const [paymentTerms, setPaymentTerms] = useState(PAYMENT_TERMS[1]);
+export default function AddCustomerForm({ open, onClose, onSaved, customer }: AddCustomerFormProps) {
+  const isEditing = Boolean(customer);
+  // The parent remounts this component (via `key`) whenever it switches
+  // between "add new" and "edit customer X", so these initial values only
+  // need to be read once per mount — no effect required to keep them in sync.
+  const [name, setName] = useState(customer?.name ?? "");
+  const [contactPerson, setContactPerson] = useState(customer?.contactPerson ?? "");
+  const [phone, setPhone] = useState(customer?.phone ?? "");
+  const [email, setEmail] = useState(customer?.email ?? "");
+  const [billingAddress, setBillingAddress] = useState(customer?.billingAddress ?? "");
+  const [paymentTerms, setPaymentTerms] = useState(customer?.paymentTerms ?? PAYMENT_TERMS[1]);
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  function reset() {
-    setName("");
-    setContactPerson("");
-    setPhone("");
-    setEmail("");
-    setBillingAddress("");
-    setPaymentTerms(PAYMENT_TERMS[1]);
-    setErrors({});
-    setFormError("");
-  }
-
   function handleClose() {
-    reset();
     onClose();
   }
 
@@ -72,27 +67,31 @@ export default function AddCustomerForm({ open, onClose, onAdd }: AddCustomerFor
     setSubmitting(true);
 
     const supabase = createClient();
-    const { data, error } = await supabase
-      .from("customers")
-      .insert({
-        name: name.trim(),
-        contact_person: contactPerson.trim(),
-        phone: phone.trim(),
-        email: email.trim(),
-        billing_address: billingAddress.trim(),
-        payment_terms: paymentTerms,
-      })
+    const payload = {
+      name: name.trim(),
+      contact_person: contactPerson.trim(),
+      phone: phone.trim(),
+      email: email.trim(),
+      billing_address: billingAddress.trim(),
+      payment_terms: paymentTerms,
+    };
+
+    const query = customer
+      ? supabase.from("customers").update(payload).eq("id", customer.id)
+      : supabase.from("customers").insert(payload);
+
+    const { data, error } = await query
       .select("id, name, contact_person, phone, email, billing_address, payment_terms, created_at")
       .single();
 
     setSubmitting(false);
 
     if (error || !data) {
-      setFormError(error?.message ?? "Could not add customer");
+      setFormError(error?.message ?? "Could not save customer");
       return;
     }
 
-    const customer: Customer = {
+    onSaved({
       id: data.id,
       name: data.name,
       contactPerson: data.contact_person ?? "",
@@ -101,10 +100,7 @@ export default function AddCustomerForm({ open, onClose, onAdd }: AddCustomerFor
       billingAddress: data.billing_address ?? "",
       paymentTerms: data.payment_terms,
       createdAt: data.created_at,
-    };
-
-    onAdd(customer);
-    reset();
+    });
     onClose();
   }
 
@@ -112,8 +108,8 @@ export default function AddCustomerForm({ open, onClose, onAdd }: AddCustomerFor
     <Modal
       open={open}
       onClose={handleClose}
-      title="Add Customer"
-      subtitle="Add a customer you haul loads for"
+      title={isEditing ? T.editCustomer : "Add Customer"}
+      subtitle={isEditing ? T.editCustomerSubtitle : "Add a customer you haul loads for"}
       footer={
         <>
           <button
@@ -129,7 +125,7 @@ export default function AddCustomerForm({ open, onClose, onAdd }: AddCustomerFor
             disabled={submitting}
             className="rounded-lg px-4 py-2 text-sm font-medium bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 disabled:opacity-60 text-white transition-all shadow-md shadow-blue-600/20"
           >
-            {submitting ? C.saving : "Add Customer"}
+            {submitting ? C.saving : isEditing ? T.saveChanges : "Add Customer"}
           </button>
         </>
       }
@@ -163,8 +159,8 @@ export default function AddCustomerForm({ open, onClose, onAdd }: AddCustomerFor
             <input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="+91 98765 43210"
-              maxLength={16}
+              placeholder="9876543210"
+              maxLength={10}
               className={inputClass(Boolean(errors.phone))}
             />
             {errors.phone && <p className="mt-1.5 text-xs text-red-500">{errors.phone}</p>}

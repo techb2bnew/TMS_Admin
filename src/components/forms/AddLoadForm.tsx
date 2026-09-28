@@ -5,6 +5,7 @@ import Modal from "@/components/ui/Modal";
 import AddCustomerForm from "@/components/forms/AddCustomerForm";
 import { APP_TEXT } from "@/constants/text";
 import { createClient } from "@/lib/supabase/client";
+import { geocodeAddress } from "@/lib/geocode";
 import type { Customer, Load } from "@/types";
 
 const C = APP_TEXT.common;
@@ -169,6 +170,28 @@ export default function AddLoadForm({ open, onClose, onAdd }: AddLoadFormProps) 
     onAdd({ ...data, assigned_driver: null });
     reset();
     onClose();
+
+    // Best-effort — geocode the pickup/drop text into coordinates and fill
+    // in the pickup/drop stops the DB trigger already auto-created, so the
+    // route shows up on the map. A failed lookup just leaves no route yet.
+    const [pickupCoords, dropCoords] = await Promise.all([
+      geocodeAddress(pickup.trim()),
+      geocodeAddress(drop.trim()),
+    ]);
+    if (pickupCoords) {
+      await supabase
+        .from("load_stops")
+        .update({ lat: pickupCoords.lat, lng: pickupCoords.lng })
+        .eq("load_id", data.id)
+        .eq("type", "pickup");
+    }
+    if (dropCoords) {
+      await supabase
+        .from("load_stops")
+        .update({ lat: dropCoords.lat, lng: dropCoords.lng })
+        .eq("load_id", data.id)
+        .eq("type", "drop");
+    }
   }
 
   return (
@@ -288,11 +311,9 @@ export default function AddLoadForm({ open, onClose, onAdd }: AddLoadFormProps) 
         )}
       </form>
     </Modal>
-      <AddCustomerForm
-        open={showAddCustomer}
-        onClose={() => setShowAddCustomer(false)}
-        onAdd={handleNewCustomer}
-      />
+      {showAddCustomer && (
+        <AddCustomerForm open onClose={() => setShowAddCustomer(false)} onSaved={handleNewCustomer} />
+      )}
     </>
   );
 }

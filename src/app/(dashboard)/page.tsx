@@ -6,6 +6,7 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import { LoadsIcon, DriversIcon, ReportsIcon, NotificationsIcon } from "@/components/icons";
 import GoogleFleetMap, { type FleetMapDriver } from "@/components/GoogleFleetMap";
 import { createClient } from "@/lib/supabase/server";
+import { fetchLoadRoutes } from "@/lib/loadRoutes";
 import { formatRelativeTime } from "@/lib/format";
 import type { Load, LoadStatus } from "@/types";
 
@@ -87,6 +88,8 @@ export default async function DashboardPage() {
     })
     .filter((d): d is FleetMapDriver => d !== null);
 
+  const mapRoutes = await fetchLoadRoutes(supabase, activeLoads, truckNumberById);
+
   const recentLoads: (Load & { driverName: string | null })[] = loadRows.slice(0, 5).map((l) => ({
     id: l.id,
     load_number: l.load_number,
@@ -129,7 +132,7 @@ export default async function DashboardPage() {
               </span>
             </div>
 
-            <GoogleFleetMap drivers={mapDrivers} height="18rem" />
+            <GoogleFleetMap drivers={mapDrivers} routes={mapRoutes} height="18rem" />
             <div className="px-5 py-2.5 text-xs opacity-50 border-t border-blue-600/10 dark:border-blue-400/10">
               {T.mapNote}
             </div>
@@ -163,7 +166,11 @@ export default async function DashboardPage() {
                     key={load.id}
                     className="border-t border-blue-600/5 dark:border-blue-400/5 hover:bg-blue-50/60"
                   >
-                    <td className="px-5 py-3 font-medium">{load.load_number}</td>
+                    <td className="px-5 py-3 font-medium">
+                      <Link href={`/loads/${load.id}`} className="text-blue-600 dark:text-blue-400 hover:underline">
+                        {load.load_number}
+                      </Link>
+                    </td>
                     <td className="px-5 py-3 opacity-80">{load.customer_name}</td>
                     <td className="px-5 py-3 opacity-70">
                       {load.pickup_location} → {load.drop_location}

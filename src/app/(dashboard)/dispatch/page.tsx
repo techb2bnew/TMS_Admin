@@ -144,8 +144,20 @@ export default function DispatchPage() {
         )
       );
       const driver = drivers.find((d) => d.id === driverId);
-      const loadLabel = loads.find((l) => l.id === loadId)?.load_number ?? loadId;
+      const load = loads.find((l) => l.id === loadId);
+      const truck = trucks.find((t) => t.id === truckId);
+      const loadLabel = load?.load_number ?? loadId;
       showToast(`${driver?.full_name ?? "Driver"} assigned to ${loadLabel}`);
+
+      if (load && truck) {
+        await supabase.from("notifications").insert({
+          user_id: driverId,
+          title: T.assignmentNotificationTitle,
+          message: T.assignmentNotificationMessage(loadLabel, load.pickup_location, load.drop_location, truck.truck_number),
+        });
+      }
+    } else {
+      showToast(error.message);
     }
     setConfirmTarget(null);
   }
@@ -217,12 +229,21 @@ export default function DispatchPage() {
                   onChange={(e) => handleTruckSelectChange(load.id, e.target.value)}
                   className="flex-1 rounded-lg border border-blue-600/10 dark:border-blue-400/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-600 transition-colors"
                 >
-                  <option value="">{availableTrucks.length === 0 ? "No trucks available" : "Select a truck"}</option>
-                  {availableTrucks.map((truck) => (
-                    <option key={truck.id} value={truck.id}>
-                      {truck.truck_number}
-                    </option>
-                  ))}
+                  {(() => {
+                    const fittingTrucks = availableTrucks.filter((truck) => truck.capacity_kg >= load.weight_kg);
+                    return (
+                      <>
+                        <option value="">
+                          {fittingTrucks.length === 0 ? "No trucks with enough capacity" : "Select a truck"}
+                        </option>
+                        {fittingTrucks.map((truck) => (
+                          <option key={truck.id} value={truck.id}>
+                            {truck.truck_number} ({truck.capacity_kg.toLocaleString("en-IN")} kg)
+                          </option>
+                        ))}
+                      </>
+                    );
+                  })()}
                   <option value={ADD_NEW_TRUCK}>+ Add New Truck</option>
                 </select>
                 <button

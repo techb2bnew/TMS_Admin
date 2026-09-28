@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { APP_TEXT } from "@/constants/text";
 import PageHeader from "@/components/ui/PageHeader";
 import StatusStepper from "@/components/ui/StatusStepper";
 import GoogleFleetMap, { type FleetMapDriver } from "@/components/GoogleFleetMap";
 import { createClient } from "@/lib/supabase/server";
+import { fetchLoadRoutes } from "@/lib/loadRoutes";
 import type { LoadStatus } from "@/types";
 
 const T = APP_TEXT.tracking;
@@ -12,6 +14,7 @@ const ACTIVE_LOAD_STATUSES: LoadStatus[] = ["assigned", "picked_up", "in_transit
 type LoadRow = {
   id: string;
   load_number: string;
+  customer_name: string;
   pickup_location: string;
   drop_location: string;
   status: LoadStatus;
@@ -23,16 +26,21 @@ type LoadRow = {
 export default async function TrackingPage() {
   const supabase = await createClient();
 
-  const [{ data: loadsData }, { data: locationsData }] = await Promise.all([
+  const [{ data: loadsData }, { data: locationsData }, { data: trucksData }] = await Promise.all([
     supabase
       .from("loads")
-      .select("id, load_number, pickup_location, drop_location, status, assigned_driver_id, assigned_truck_id, drivers(profiles(full_name))")
+      .select(
+        "id, load_number, customer_name, pickup_location, drop_location, status, assigned_driver_id, assigned_truck_id, drivers(profiles(full_name))"
+      )
       .in("status", ACTIVE_LOAD_STATUSES),
     supabase.from("driver_locations").select("driver_id, lat, lng"),
+    supabase.from("trucks").select("id, truck_number"),
   ]);
 
   const activeLoads = (loadsData ?? []) as unknown as LoadRow[];
   const locationByDriverId = new Map((locationsData ?? []).map((l) => [l.driver_id, { lat: l.lat, lng: l.lng }]));
+  const truckNumberById = new Map((trucksData ?? []).map((t) => [t.id, t.truck_number]));
+  const mapRoutes = await fetchLoadRoutes(supabase, activeLoads, truckNumberById);
 
   const mapDrivers: FleetMapDriver[] = activeLoads
     .map((l): FleetMapDriver | null => {
@@ -64,7 +72,7 @@ export default async function TrackingPage() {
               Live
             </span>
           </div>
-          <GoogleFleetMap drivers={mapDrivers} height="32rem" />
+          <GoogleFleetMap drivers={mapDrivers} routes={mapRoutes} height="32rem" />
         </div>
 
         <div className="space-y-3">
@@ -79,7 +87,9 @@ export default async function TrackingPage() {
           {activeLoads.map((load) => (
             <div key={load.id} className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
               <div className="flex items-start justify-between mb-1">
-                <span className="font-medium text-sm">{load.load_number}</span>
+                <Link href={`/loads/${load.id}`} className="font-medium text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                  {load.load_number}
+                </Link>
                 <span className="text-xs opacity-50">{load.drivers?.profiles?.full_name ?? "—"}</span>
               </div>
               <div className="text-xs opacity-60 mb-4">

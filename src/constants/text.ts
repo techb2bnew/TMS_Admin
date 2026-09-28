@@ -196,6 +196,9 @@ export const APP_TEXT = {
     selectDriver: "Select a driver",
     assignedToast: "assigned to",
     allAssigned: "All loads are assigned — nothing pending dispatch",
+    assignmentNotificationTitle: "New load assigned",
+    assignmentNotificationMessage: (loadLabel: string, pickup: string, drop: string, truckNumber: string) =>
+      `You've been assigned to load ${loadLabel} (${pickup} → ${drop}) with truck ${truckNumber}.`,
     noAvailableDrivers: "No drivers available right now",
     onRoute: "On route",
     idle: "Idle",
@@ -279,7 +282,13 @@ export const APP_TEXT = {
       phone: "Phone",
       email: "Email",
       paymentTerms: "Payment Terms",
+      actions: "Actions",
     },
+    edit: "Edit",
+    editCustomer: "Edit Customer",
+    editCustomerSubtitle: "Update this customer's details",
+    saveChanges: "Save Changes",
+    updatedToast: "updated",
     emptyState: "No customers match your search",
   },
   expenses: {
