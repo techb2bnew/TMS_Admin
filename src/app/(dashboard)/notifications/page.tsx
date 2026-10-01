@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { APP_TEXT } from "@/constants/text";
 import PageHeader from "@/components/ui/PageHeader";
+import Toast from "@/components/ui/Toast";
 import { NotificationsIcon } from "@/components/icons";
 import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/lib/useToast";
 import { formatRelativeTime } from "@/lib/format";
 
 const T = APP_TEXT.notifications;
@@ -20,6 +22,7 @@ type NotificationRow = {
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [filter, setFilter] = useState<"all" | "unread">("all");
+  const { message, showToast } = useToast();
 
   useEffect(() => {
     async function load() {
@@ -41,19 +44,36 @@ export default function NotificationsPage() {
   const filtered = notifications.filter((n) => filter === "all" || !n.is_read);
 
   async function markAllRead() {
+    const previous = notifications;
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id);
+    const { error } = await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id);
+    if (error) {
+      setNotifications(previous);
+      showToast(error.message);
+    }
   }
 
   async function markRead(id: string) {
+    const previous = notifications;
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
     const supabase = createClient();
-    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    // .select() so an RLS mismatch (0 rows matched, no error) is visible as
+    // an empty array instead of silently "succeeding" and reverting on the
+    // next reload.
+    const { data, error } = await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("id", id)
+      .select("id");
+    if (error || !data || data.length === 0) {
+      setNotifications(previous);
+      showToast(error?.message ?? "Could not mark as read");
+    }
   }
 
   return (
@@ -114,6 +134,7 @@ export default function NotificationsPage() {
           <div className="px-5 py-10 text-center text-sm opacity-50">{T.emptyState}</div>
         )}
       </div>
+      <Toast message={message} />
     </div>
   );
 }

@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "B2B TMT Admin",
+  title: "B2B TMS Admin",
   description: "Transport Management System - Admin Panel",
 };
 

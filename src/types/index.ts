@@ -76,6 +76,71 @@ export type Customer = {
   createdAt: string;
 };
 
+export type Carrier = {
+  id: string;
+  name: string;
+  mcNumber: string;
+  dotNumber: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  insuranceExpiry: string | null;
+  status: "active" | "inactive";
+  createdAt: string;
+};
+
+export type Trailer = {
+  id: string;
+  trailerNumber: string;
+  type: "dry_van" | "reefer" | "flatbed";
+  capacityKg: number | null;
+  status: "available" | "in_use" | "maintenance";
+  createdAt: string;
+};
+
+export type SavedLocation = {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  lat: number;
+  lng: number;
+  type: "pickup" | "drop" | "yard" | "other";
+  createdAt: string;
+};
+
+export type LoadTender = {
+  id: string;
+  source: "manual" | "edi";
+  customerName: string;
+  pickupLocation: string;
+  dropLocation: string;
+  rate: number | null;
+  weightKg: number | null;
+  truckType: string;
+  status: "pending" | "accepted" | "rejected";
+  receivedAt: string;
+};
+
+export type FeedbackItem = {
+  id: string;
+  createdBy: string | null;
+  message: string;
+  category: "bug" | "feature_request" | "other";
+  status: "open" | "resolved";
+  createdAt: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  body: string;
+  readAt: string | null;
+  createdAt: string;
+};
+
 export type ExpenseCategory = "Fuel" | "Tolls" | "Maintenance" | "Insurance" | "Other";
 
 export type Expense = {

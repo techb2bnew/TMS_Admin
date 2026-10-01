@@ -209,3 +209,80 @@ export function TruckMarkerIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function RatesIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" strokeWidth="1.7">
+      <path d="M13 3 3 13l8 8 10-10V3h-8Z" stroke="currentColor" strokeLinejoin="round" />
+      <circle cx="16.5" cy="7.5" r="1.6" stroke="currentColor" />
+    </svg>
+  );
+}
+
+export function CarriersIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" strokeWidth="1.7">
+      <rect x="2.5" y="7" width="12" height="9" rx="1.3" stroke="currentColor" />
+      <path d="M14.5 10h4.1c.35 0 .68.16.9.44l1.9 2.4c.16.2.25.46.25.72v1.6a.84.84 0 0 1-.84.84H14.5V10Z" stroke="currentColor" strokeLinejoin="round" />
+      <circle cx="6.5" cy="17.3" r="1.7" stroke="currentColor" />
+      <circle cx="18" cy="17.3" r="1.7" stroke="currentColor" />
+    </svg>
+  );
+}
+
+export function TrailersIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" strokeWidth="1.7">
+      <rect x="2.5" y="6" width="19" height="9.5" rx="1.3" stroke="currentColor" />
+      <path d="M2.5 10h19" stroke="currentColor" />
+      <circle cx="7" cy="17.8" r="1.6" stroke="currentColor" />
+      <circle cx="17" cy="17.8" r="1.6" stroke="currentColor" />
+    </svg>
+  );
+}
+
+export function LocationsIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" strokeWidth="1.7">
+      <path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z" stroke="currentColor" strokeLinejoin="round" />
+      <circle cx="12" cy="9.5" r="2.3" stroke="currentColor" />
+    </svg>
+  );
+}
+
+export function TendersIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" strokeWidth="1.7">
+      <path d="M6 3.5h9l4 4v12.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" stroke="currentColor" strokeLinejoin="round" />
+      <path d="M14.5 3.5V8h4.3" stroke="currentColor" strokeLinejoin="round" />
+      <path d="M8 13.5h8M8 17h5" stroke="currentColor" />
+    </svg>
+  );
+}
+
+export function FeedbackIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" strokeWidth="1.7">
+      <path d="M4 5.5h16v10.5a1 1 0 0 1-1 1H9l-4.5 3.7V16.5h-.5a1 1 0 0 1-1-1V5.5Z" stroke="currentColor" strokeLinejoin="round" />
+      <path d="M8 9.5h8M8 12.5h5" stroke="currentColor" />
+    </svg>
+  );
+}
+
+export function DocumentsIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" strokeWidth="1.7">
+      <path d="M7 3.5h7l4 4v12.5a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" stroke="currentColor" strokeLinejoin="round" />
+      <path d="M13.5 3.5V8h4.3" stroke="currentColor" strokeLinejoin="round" />
+      <path d="M8.5 13h7M8.5 16.5h4.5" stroke="currentColor" />
+    </svg>
+  );
+}
+
+export function MessagesIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" strokeWidth="1.7">
+      <path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-5 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" stroke="currentColor" strokeLinejoin="round" />
+    </svg>
+  );
+}
