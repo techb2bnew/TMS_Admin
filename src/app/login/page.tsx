@@ -17,8 +17,14 @@ const STATS = [
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  // Dev-only convenience: prefilled from .env.local so local testing is one
+  // click. Gated on NODE_ENV so a production build never ships these values.
+  const [email, setEmail] = useState(
+    process.env.NODE_ENV === "development" ? (process.env.NEXT_PUBLIC_DEV_ADMIN_EMAIL ?? "") : ""
+  );
+  const [password, setPassword] = useState(
+    process.env.NODE_ENV === "development" ? (process.env.NEXT_PUBLIC_DEV_ADMIN_PASSWORD ?? "") : ""
+  );
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [formError, setFormError] = useState("");
