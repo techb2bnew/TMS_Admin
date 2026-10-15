@@ -19,8 +19,8 @@ export default function LoginPage() {
   const router = useRouter();
   // Dev-only convenience: prefilled from .env.local so local testing is one
   // click. Gated on NODE_ENV so a production build never ships these values.
-const [email, setEmail] = useState(process.env.NEXT_PUBLIC_DEV_ADMIN_EMAIL ?? "");
-const [password, setPassword] = useState(process.env.NEXT_PUBLIC_DEV_ADMIN_PASSWORD ?? "");
+  const [email, setEmail] = useState(process.env.NEXT_PUBLIC_DEV_ADMIN_EMAIL ?? "");
+  const [password, setPassword] = useState(process.env.NEXT_PUBLIC_DEV_ADMIN_PASSWORD ?? "");
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [formError, setFormError] = useState("");
@@ -134,133 +134,131 @@ const [password, setPassword] = useState(process.env.NEXT_PUBLIC_DEV_ADMIN_PASSW
       <div className="relative z-10 flex-1 grid lg:grid-cols-2">
         {/* Left half */}
         <div className="flex items-center justify-center px-6 sm:px-12 lg:px-16 py-16">
-        <div className="max-w-lg animate-fade-in-up">
-          <div className="flex items-center gap-2 mb-6">
-            <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeWidth="1.7">
-                <path d="M3 7a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v9H4a1 1 0 0 1-1-1V7Z" stroke="currentColor" />
-                <path d="M14 10h4.4a1 1 0 0 1 .8.4l2 2.67a1 1 0 0 1 .2.6V15a1 1 0 0 1-1 1H14v-6Z" stroke="currentColor" />
-                <circle cx="7.5" cy="17.5" r="1.6" stroke="currentColor" />
-                <circle cx="17" cy="17.5" r="1.6" stroke="currentColor" />
-              </svg>
-            </span>
-            <span className="text-sm font-semibold text-[#10182b]">{APP_TEXT.app.name}</span>
-          </div>
+          <div className="max-w-lg animate-fade-in-up">
+            <div className="flex items-center gap-2 mb-6">
+              <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeWidth="1.7">
+                  <path d="M3 7a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v9H4a1 1 0 0 1-1-1V7Z" stroke="currentColor" />
+                  <path d="M14 10h4.4a1 1 0 0 1 .8.4l2 2.67a1 1 0 0 1 .2.6V15a1 1 0 0 1-1 1H14v-6Z" stroke="currentColor" />
+                  <circle cx="7.5" cy="17.5" r="1.6" stroke="currentColor" />
+                  <circle cx="17" cy="17.5" r="1.6" stroke="currentColor" />
+                </svg>
+              </span>
+              <span className="text-sm font-semibold text-[#10182b]">{APP_TEXT.app.name}</span>
+            </div>
 
-          <div className="text-xs font-semibold tracking-widest text-blue-600 uppercase mb-3">
-            Fleet Operations
-          </div>
-          <h1 className="text-4xl sm:text-5xl font-semibold text-[#10182b] leading-tight mb-4">
-            {T.brandHeadline}
-          </h1>
-          <p className="text-slate-500 text-base mb-10 max-w-md">{T.brandSubtext}</p>
+            <div className="text-xs font-semibold tracking-widest text-blue-600 uppercase mb-3">
+              Fleet Operations
+            </div>
+            <h1 className="text-4xl sm:text-5xl font-semibold text-[#10182b] leading-tight mb-4">
+              {T.brandHeadline}
+            </h1>
+            <p className="text-slate-500 text-base mb-10 max-w-md">{T.brandSubtext}</p>
 
-          <div className="flex items-center gap-6 sm:gap-10 flex-wrap">
-            {STATS.map((stat, i) => (
-              <div key={stat.label} className={i > 0 ? "pl-6 sm:pl-10 border-l border-slate-300/70" : ""}>
-                <div className="text-sm font-semibold text-[#10182b]">{stat.label}</div>
-                <div className="text-xs text-slate-500 mt-0.5">{stat.hint}</div>
-              </div>
-            ))}
+            <div className="flex items-center gap-6 sm:gap-10 flex-wrap">
+              {STATS.map((stat, i) => (
+                <div key={stat.label} className={i > 0 ? "pl-6 sm:pl-10 border-l border-slate-300/70" : ""}>
+                  <div className="text-sm font-semibold text-[#10182b]">{stat.label}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">{stat.hint}</div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
         </div>
 
         {/* Right half — card */}
         <div className="flex items-center justify-center px-6 sm:px-12 lg:px-16 py-16">
-        <div className="w-full max-w-sm animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
-          <div className="relative rounded-2xl border border-white/60 bg-white/85 backdrop-blur-xl shadow-[0_20px_60px_rgba(37,99,235,0.15)] p-8 overflow-hidden">
-            <span className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-500" />
-            <h2 className="text-2xl font-semibold mb-1 text-[#10182b]">{T.formTitle}</h2>
-            <p className="text-sm text-slate-500 mb-8">{T.formSubtitle}</p>
+          <div className="w-full max-w-sm animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
+            <div className="relative rounded-2xl border border-white/60 bg-white/85 backdrop-blur-xl shadow-[0_20px_60px_rgba(37,99,235,0.15)] p-8 overflow-hidden">
+              <span className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-500" />
+              <h2 className="text-2xl font-semibold mb-1 text-[#10182b]">{T.formTitle}</h2>
+              <p className="text-sm text-slate-500 mb-8">{T.formSubtitle}</p>
 
-            <form onSubmit={handleSubmit} noValidate className="space-y-4">
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium mb-1.5 text-[#10182b]">
-                  {T.emailLabel}
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder={T.emailPlaceholder}
-                  aria-invalid={Boolean(fieldErrors.email)}
-                  className={`w-full rounded-lg border px-3.5 py-2.5 text-sm bg-white/70 text-[#10182b] placeholder:text-slate-400 outline-none transition-colors focus:ring-2 focus:ring-blue-500/30 ${
-                    fieldErrors.email ? "border-red-500" : "border-slate-200 focus:border-blue-500"
-                  }`}
-                />
-                {fieldErrors.email && (
-                  <p className="mt-1.5 text-xs text-red-500">{fieldErrors.email}</p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium mb-1.5 text-[#10182b]">
-                  {T.passwordLabel}
-                </label>
-                <div className="relative">
+              <form onSubmit={handleSubmit} noValidate className="space-y-4">
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium mb-1.5 text-[#10182b]">
+                    {T.emailLabel}
+                  </label>
                   <input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={T.passwordPlaceholder}
-                    aria-invalid={Boolean(fieldErrors.password)}
-                    className={`w-full rounded-lg border px-3.5 py-2.5 pr-16 text-sm bg-white/70 text-[#10182b] placeholder:text-slate-400 outline-none transition-colors focus:ring-2 focus:ring-blue-500/30 ${
-                      fieldErrors.password ? "border-red-500" : "border-slate-200 focus:border-blue-500"
-                    }`}
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder={T.emailPlaceholder}
+                    aria-invalid={Boolean(fieldErrors.email)}
+                    className={`w-full rounded-lg border px-3.5 py-2.5 text-sm bg-white/70 text-[#10182b] placeholder:text-slate-400 outline-none transition-colors focus:ring-2 focus:ring-blue-500/30 ${fieldErrors.email ? "border-red-500" : "border-slate-200 focus:border-blue-500"
+                      }`}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500 hover:text-[#10182b]"
-                  >
-                    {showPassword ? T.hidePassword : T.showPassword}
-                  </button>
+                  {fieldErrors.email && (
+                    <p className="mt-1.5 text-xs text-red-500">{fieldErrors.email}</p>
+                  )}
                 </div>
-                {fieldErrors.password && (
-                  <p className="mt-1.5 text-xs text-red-500">{fieldErrors.password}</p>
-                )}
-              </div>
 
-              {formError && (
-                <div className="rounded-lg bg-red-50 border border-red-200 px-3.5 py-2.5 text-sm text-red-600">
-                  {formError}
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium mb-1.5 text-[#10182b]">
+                    {T.passwordLabel}
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={T.passwordPlaceholder}
+                      aria-invalid={Boolean(fieldErrors.password)}
+                      className={`w-full rounded-lg border px-3.5 py-2.5 pr-16 text-sm bg-white/70 text-[#10182b] placeholder:text-slate-400 outline-none transition-colors focus:ring-2 focus:ring-blue-500/30 ${fieldErrors.password ? "border-red-500" : "border-slate-200 focus:border-blue-500"
+                        }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500 hover:text-[#10182b]"
+                    >
+                      {showPassword ? T.hidePassword : T.showPassword}
+                    </button>
+                  </div>
+                  {fieldErrors.password && (
+                    <p className="mt-1.5 text-xs text-red-500">{fieldErrors.password}</p>
+                  )}
                 </div>
-              )}
 
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 transition-all shadow-[0_8px_24px_rgba(37,99,235,0.35)] hover:shadow-[0_10px_28px_rgba(37,99,235,0.45)] hover:-translate-y-0.5 flex items-center justify-center gap-2"
-              >
-                {isSubmitting && (
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                    />
-                  </svg>
+                {formError && (
+                  <div className="rounded-lg bg-red-50 border border-red-200 px-3.5 py-2.5 text-sm text-red-600">
+                    {formError}
+                  </div>
                 )}
-                {isSubmitting ? T.submitLoading : T.submit}
-              </button>
-            </form>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 transition-all shadow-[0_8px_24px_rgba(37,99,235,0.35)] hover:shadow-[0_10px_28px_rgba(37,99,235,0.45)] hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                >
+                  {isSubmitting && (
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                      />
+                    </svg>
+                  )}
+                  {isSubmitting ? T.submitLoading : T.submit}
+                </button>
+              </form>
+            </div>
+
+            <p className="mt-5 text-xs text-center text-slate-500">{T.footerNote}</p>
           </div>
-
-          <p className="mt-5 text-xs text-center text-slate-500">{T.footerNote}</p>
-        </div>
         </div>
       </div>
 
