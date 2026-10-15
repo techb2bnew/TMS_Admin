@@ -373,7 +373,7 @@ export const APP_TEXT = {
       },
       {
         heading: "5. Your rights",
-        body: "You can request a copy of your data or ask for your account to be deleted at any time from the Account screen. Deletion requests are reviewed by your fleet administrator.",
+        body: "You can request a copy of your data or ask for your account to be deleted at any time from Profile > Delete Account in the app. Deletion requests are reviewed by your fleet administrator. See the Delete Account page for the full steps.",
       },
       {
         heading: "6. Contact us",
@@ -575,6 +575,44 @@ export const APP_TEXT = {
     send: "Send",
     noMessages: "No messages yet — say hello",
     noDriverSelected: "Select a driver to start chatting",
+  },
+  deleteAccount: {
+    title: "Delete your account and data",
+    intro:
+      "This page explains how a B2B TMS Driver user can request deletion of their account and data. B2B TMS Driver accounts are created and managed by your fleet company, so deletion requests are reviewed by your fleet administrator.",
+    sections: [
+      {
+        heading: "How to request deletion",
+        items: [
+          "Open the B2B TMS Driver app and sign in.",
+          "Go to the Profile tab and tap Delete Account.",
+          "Confirm the request. It is sent to your fleet administrator for review.",
+          "If you cannot use the app, email us from the address below and we will pass your request to your fleet administrator.",
+        ],
+      },
+      {
+        heading: "Data that is deleted",
+        items: [
+          "Your profile: name, phone number, email address and license details.",
+          "Your login account.",
+          "Your chat messages with your fleet administrator.",
+          "Your expenses, duty logs and notifications.",
+        ],
+      },
+      {
+        heading: "Data that may be kept",
+        items: [
+          "Load, delivery and proof-of-delivery records, because they belong to your fleet company and are needed for its billing, accounting and legal records. They are no longer linked to your profile once your account is removed.",
+        ],
+      },
+      {
+        heading: "Retention period",
+        items: [
+          "Deletion is completed within 30 days of your fleet administrator approving the request. Backups are cleared within a further 90 days.",
+        ],
+      },
+    ],
+    contactPrefix: "For help with a deletion request, contact",
   },
   support: {
     title: "Support",

@@ -4,7 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 
 // These stay reachable without logging in — their URLs get submitted to the
 // App Store / Play Console listings, which must load without an admin session.
-const PUBLIC_PATHS = ["/login", "/privacy-policy", "/terms-of-service", "/support"];
+const PUBLIC_PATHS = ["/login", "/privacy-policy", "/terms-of-service", "/support", "/delete-account"];
 
 export async function proxy(request: NextRequest) {
   const isPublicPath = PUBLIC_PATHS.includes(request.nextUrl.pathname);
